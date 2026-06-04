@@ -65,7 +65,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     { name: 'Transfers', icon: ArrowRightLeft, path: '/dashboard/transfers', show: !isUnemployed },
     { name: 'Finances', icon: Settings, path: '/dashboard/finances', show: !isUnemployed },
     { name: 'Schedule', icon: Calendar, path: '/dashboard/schedule', show: !isUnemployed },
-    { name: 'Settings', icon: Settings, path: '/settings', show: true },
+    { name: 'Settings', icon: Settings, path: '/dashboard/settings', show: true },
   ];
 
   const myTeam = database?.teams.find(t => t.id === playerTeamId);
