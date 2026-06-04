@@ -1,5 +1,6 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { persist, StateStorage, createJSONStorage } from 'zustand/middleware';
+import { get, set, del } from 'idb-keyval';
 import { League, Team, Player } from '@/types';
 import { generateFMName, generateFMAge } from '@/lib/engine/nameGenerator';
 
@@ -26,7 +27,7 @@ export interface Inbox {
   subject: string;
   body: string;
   read: boolean;
-  type: 'info' | 'warning' | 'transfer' | 'board';
+  type: 'info' | 'warning' | 'transfer' | 'board' | 'success';
 }
 
 export interface PlayerStatus {
@@ -68,6 +69,7 @@ interface GameState {
   managerLicense: 'D' | 'C' | 'B' | 'A' | 'Pro' | null;
   managerRole: 'Head Coach' | 'Assistant Manager' | 'Academy Coach' | null;
   managerExperience: number; // XP Points
+  bankLoan: number; // Hutang bank
   language: 'id' | 'en';
   boardConfidence: number; // 0-100
   teamReputation: number;
@@ -93,9 +95,6 @@ interface GameState {
 
   // Player States
   playerStatuses: PlayerStatus[];
-
-  // Inbox / Notifications
-  inboxMessages: Inbox[];
 
   // Tactics
   playerTactics: {
@@ -135,7 +134,21 @@ interface GameState {
   upgradeStadium: (cost: number, capacityIncrease: number) => void;
   upgradeFacility: (facility: 'academyLevel' | 'coachingLevel' | 'medicalLevel', cost: number) => void;
   applyManagerBan: (games: number) => void;
+  takeLoan: (amount: number) => void;
+  repayLoan: (amount: number) => void;
 }
+
+const storage: StateStorage = {
+  getItem: async (name: string): Promise<string | null> => {
+    return (await get(name)) || null;
+  },
+  setItem: async (name: string, value: string): Promise<void> => {
+    await set(name, value);
+  },
+  removeItem: async (name: string): Promise<void> => {
+    await del(name);
+  },
+};
 
 export const useGameStore = create<GameState>()(
   persist(
@@ -148,6 +161,7 @@ export const useGameStore = create<GameState>()(
       managerLicense: null,
       managerRole: null,
       managerExperience: 0,
+      bankLoan: 0,
       language: 'id',
       boardConfidence: 70,
       teamReputation: 50,
@@ -189,9 +203,51 @@ export const useGameStore = create<GameState>()(
         let newNews = [...state.news];
         let newAtmosphere = state.dressingRoomAtmosphere;
         let newStatuses = [...state.playerStatuses];
+        let newBoardConfidence = state.boardConfidence;
+        let newSultan = state.hasSultanOwner;
         
         if (newDatabase) {
-           // Naturalisasi Event
+           if (nextDay.getDate() === 1 && nextDay.getMonth() === 6) {
+              newNews.push({ id: `news-${Date.now()}-season`, date: nextDay.toISOString().split('T')[0], title: `MUSIM BARU DIMULAI!`, content: `Bursa transfer musim panas dibuka. Pemain tua mempertimbangkan pensiun.`, type: 'GOSSIP' });
+              
+              newDatabase.players = newDatabase.players.map(p => {
+                 let updatedP = { ...p };
+                 updatedP.age += 1;
+
+                 if (updatedP.age > 35 && Math.random() < 0.4) {
+                    newNews.push({ id: `news-${Date.now()}-ret-${p.id}`, date: nextDay.toISOString().split('T')[0], title: `LEGENDA GANTUNG SEPATU: ${p.name} Pensiun.`, content: `Di usia ${updatedP.age} tahun, pemain ini memutuskan pensiun dari sepakbola profesional.`, type: 'GOSSIP' });
+                    updatedP = {
+                       ...updatedP,
+                       name: `Regen ${Math.random().toString(36).substring(2,6)}`,
+                       age: 16,
+                       overall: Math.max(40, updatedP.overall - 30),
+                       potential: Math.min(99, updatedP.overall + 10),
+                       value: 100000,
+                       wage: 1000
+                    };
+                 } 
+                 else if (updatedP.age >= 33) {
+                    updatedP.overall = Math.max(30, updatedP.overall - Math.floor(Math.random() * 3));
+                 }
+                 else if (updatedP.age <= 23) {
+                    updatedP.overall = Math.min(updatedP.potential, updatedP.overall + Math.floor(Math.random() * 4));
+                 }
+                 return updatedP;
+              });
+           }
+
+           if (state.playerTeamId && state.playerTeamId !== 'UNEMPLOYED' && !state.hasSultanOwner && Math.random() < 0.001) {
+              const myTeamIndex = newDatabase.teams.findIndex(t => t.id === state.playerTeamId);
+              if (myTeamIndex > -1) {
+                 newDatabase.teams[myTeamIndex].transferBudget += 500000000;
+                 newDatabase.teams[myTeamIndex].reputation = 9999;
+                 newSultan = true;
+                 newBoardConfidence = 50;
+                 newInbox.push({id: `msg-${Date.now()}-sultan`, date: nextDay.toISOString().split('T')[0], from: 'Pemilik Baru', subject: 'Klub Telah Dibeli Sultan!', body: 'Kami telah menyuntikkan 500 Juta Euro ke kas transfer. Tapi ingat, kami menuntut Anda meraih Tiga Gelar musim ini atau Anda dipecat!', read: false, type: 'warning'});
+                 newNews.push({ id: `news-${Date.now()}-sultan`, date: nextDay.toISOString().split('T')[0], title: `KLUB KAYA BARU! ${newDatabase.teams[myTeamIndex].name} Dibeli Triliuner.`, content: `Fans berpesta! Klub ini baru saja mendapat suntikan dana tak terbatas.`, type: 'GOSSIP' });
+              }
+           }
+
            if (Math.random() < 0.05) {
              const somePlayer = newDatabase.players[Math.floor(Math.random() * newDatabase.players.length)];
              const someLeague = newDatabase.leagues[Math.floor(Math.random() * newDatabase.leagues.length)];
@@ -203,16 +259,13 @@ export const useGameStore = create<GameState>()(
              }
            }
 
-           // AI Manager & Transfers Event (Tiap Senin)
            if (nextDay.getDay() === 1) {
-              // Gossip
               if (Math.random() < 0.5) {
                  const p = newDatabase.players[Math.floor(Math.random() * newDatabase.players.length)];
                  const t = newDatabase.teams.find(tm => tm.id === p.teamId);
                  if (t) newNews.push({ id: `news-${Date.now()}-gos`, date: nextDay.toISOString().split('T')[0], title: `GOSIP RUANG GANTI: ${t.name} Memanas?`, content: `Media lokal membocorkan adanya perpecahan setelah ${p.name} terlihat cekcok dengan pelatih di sesi latihan.`, type: 'GOSSIP' });
               }
 
-              // Transfer
               if (Math.random() < 0.3) {
                  const randomClub = newDatabase.teams.filter(t => t.id !== state.playerTeamId && !t.isNational)[Math.floor(Math.random() * newDatabase.teams.length)];
                  const randomPlayer = newDatabase.players.filter(p => p.teamId !== randomClub.id && p.teamId !== state.playerTeamId && p.overall > 70)[Math.floor(Math.random() * newDatabase.players.length)];
@@ -225,7 +278,6 @@ export const useGameStore = create<GameState>()(
                  }
               }
 
-              // Sacking
               if (Math.random() < 0.2) {
                  const strugglingClub = newDatabase.teams.filter(t => t.id !== state.playerTeamId && !t.isNational && t.reputation < 6000)[Math.floor(Math.random() * newDatabase.teams.length)];
                  if (strugglingClub) {
@@ -235,10 +287,7 @@ export const useGameStore = create<GameState>()(
            }
         }
         
-        // Random Drama Events (Setiap hari)
         if (state.playerTeamId && state.playerTeamId !== 'UNEMPLOYED' && newDatabase) {
-           
-           // Tambah Experience Manajer karena sedang bekerja
            const newXp = state.managerExperience + 1;
            let newLicense = state.managerLicense;
            
@@ -248,10 +297,8 @@ export const useGameStore = create<GameState>()(
            else if (newXp === 1000 && newLicense === 'A') { newLicense = 'Pro'; newInbox.push({id: `msg-${Date.now()}-lic`, date: nextDay.toISOString().split('T')[0], from: 'Asosiasi Sepakbola', subject: '👑 LISENSI PRO DIRAIH!', body: 'Legenda sejati. 1000 hari karir. Anda telah mendapatkan gelar Lisensi Pro. Anda bebas melatih klub raksasa manapun sekarang!', read: false, type: 'success'}); }
 
            const mySquad = newDatabase.players.filter(p => p.teamId === state.playerTeamId);
-           const myLeague = newDatabase.leagues.find(l => l.id === newDatabase!.teams.find(t=>t.id===state.playerTeamId)?.leagueId);
            
            if (mySquad.length > 0) {
-             // 1. Assign Trait if missing (Backward compatibility)
              mySquad.forEach(p => {
                 if (!p.trait) {
                    const TRAITS = ['Professional', 'Professional', 'Hothead', 'Mercenary', 'Loyal', 'Ambitious', 'Troublemaker'] as const;
@@ -259,7 +306,6 @@ export const useGameStore = create<GameState>()(
                 }
              });
 
-             // 2. Homesickness Check (1% chance per day for foreigners)
              if (Math.random() < 0.01) {
                 const randomPlayer = mySquad[Math.floor(Math.random() * mySquad.length)];
                 const teamNation = newDatabase.teams.find(t=>t.id===state.playerTeamId)?.nationId;
@@ -277,7 +323,6 @@ export const useGameStore = create<GameState>()(
                 }
              }
 
-             // 3. Trait-based Complaints (Ambitious / Mercenary)
              if (Math.random() < 0.02) {
                 const randomPlayer = mySquad[Math.floor(Math.random() * mySquad.length)];
                 if (randomPlayer.trait === 'Ambitious' && state.boardConfidence < 50) {
@@ -316,7 +361,6 @@ export const useGameStore = create<GameState>()(
                 }
              }
              
-             // Mind Games Pelatih AI (Fitur 7)
              if (Math.random() < 0.05) {
                 newInbox.push({
                    id: `msg-${Date.now()}-mindgames`,
@@ -330,7 +374,6 @@ export const useGameStore = create<GameState>()(
                 newAtmosphere = Math.max(0, newAtmosphere - 5);
              }
              
-             // Player Scandals (Fitur 13)
              if (Math.random() < 0.02) {
                 newInbox.push({
                    id: `msg-${Date.now()}-scandal`,
@@ -344,8 +387,7 @@ export const useGameStore = create<GameState>()(
                 newAtmosphere = Math.max(0, newAtmosphere - 15);
              }
              
-             // Sultan Takeover (Fitur 9)
-             if (!state.hasSultanOwner && Math.random() < 0.01) { // 1% chance per day
+             if (!state.hasSultanOwner && Math.random() < 0.01) {
                 newInbox.push({
                    id: `msg-${Date.now()}-sultan`,
                    date: nextDay.toISOString().split('T')[0],
@@ -355,13 +397,9 @@ export const useGameStore = create<GameState>()(
                    read: false,
                    type: 'board'
                 });
-                set({
-                   hasSultanOwner: true,
-                   playerClubBalance: state.playerClubBalance + 500000000
-                });
+                newSultan = true;
              }
              
-             // 4. Assistant Manager Pre-match Report (Setiap hari Jumat jika ada match besok/lusa)
              if (nextDay.getDay() === 5 && Math.random() < 0.5) {
                 newInbox.push({
                    id: `msg-${Date.now()}-assistant`,
@@ -379,15 +417,13 @@ export const useGameStore = create<GameState>()(
         let newBalance = state.playerClubBalance;
         let newSponsor = state.activeSponsor;
 
-        // 2. Refresh Jobs seminggu sekali (Tiap hari Senin)
         if (nextDay.getDay() === 1) {
            get().generateJobs();
         }
 
-        // 3. Financials & Salary (Mingguan setiap hari Minggu)
         if (nextDay.getDay() === 0) {
            if (state.playerTeamId && state.managerSalary > 0) {
-              state.managerBalance += state.managerSalary;
+              set(s => ({ managerBalance: s.managerBalance + state.managerSalary }));
            }
            
            if (state.playerTeamId && state.playerTeamId !== 'UNEMPLOYED' && newDatabase) {
@@ -401,8 +437,7 @@ export const useGameStore = create<GameState>()(
                  if (newSponsor.remainingWeeks <= 0) newSponsor = null;
               }
 
-              // Kebangkrutan check
-              if (newBalance < -50000000) { // Minus 50 juta
+              if (newBalance < -50000000) {
                  newInbox.push({
                    id: `msg-${Date.now()}-bankrupt`,
                    date: nextDay.toISOString().split('T')[0],
@@ -412,7 +447,6 @@ export const useGameStore = create<GameState>()(
                    read: false,
                    type: 'warning'
                  });
-                 // Fire the manager
                  return {
                     currentDate: nextDay.toISOString().split('T')[0],
                     database: newDatabase,
@@ -428,7 +462,6 @@ export const useGameStore = create<GameState>()(
            }
         }
 
-        // Youth Intake Day (1 Maret)
         if (state.currentDate.endsWith('-03-01') && state.playerTeamId && state.playerTeamId !== 'UNEMPLOYED' && newDatabase) {
            const myTeam = newDatabase.teams.find(t => t.id === state.playerTeamId);
            if (myTeam) {
@@ -438,10 +471,9 @@ export const useGameStore = create<GameState>()(
               const TRAITS = ['Professional', 'Professional', 'Hothead', 'Mercenary', 'Loyal', 'Ambitious', 'Troublemaker'] as const;
               
               const newYouths = [];
-              const numIntake = 1 + Math.floor(Math.random() * 3); // 1-3 youth
+              const numIntake = 1 + Math.floor(Math.random() * 3);
               
               for (let i=0; i<numIntake; i++) {
-                 // Academy Lvl 1: max pot 75. Lvl 5: max pot 95.
                  const maxPot = 70 + (academyLevel * 5); 
                  const pot = Math.min(99, maxPot - Math.floor(Math.random() * 15));
                  
@@ -473,63 +505,7 @@ export const useGameStore = create<GameState>()(
               });
            }
         }
-
-        // Cek Pergantian Musim (Setiap 1 Juli)
-        if (nextDay.getDate() === 1 && nextDay.getMonth() === 6 && newDatabase) {
-           let updatedPlayers = [...newDatabase.players];
-           
-           // 1. Tambah Umur & Pensiun
-           let retiredCount = 0;
-           updatedPlayers = updatedPlayers.filter(p => {
-             const age = p.age + 1;
-             // Pensiun jika umur > 38 (peluang makin besar semakin tua)
-             if (age > 38 && Math.random() < (age - 37) * 0.2) {
-               retiredCount++;
-               return false;
-             }
-             p.age = age;
-             return true;
-           });
-           
-           // 2. Youth Intake (Tambahkan pemain 16 tahun untuk tiap tim)
-           let intakeCount = 0;
-           newDatabase.teams.forEach(team => {
-             // Tiap tim melahirkan 1-3 pemain baru
-             const intakeAmount = 1 + Math.floor(Math.random() * 3);
-             intakeCount += intakeAmount;
-             for (let i = 0; i < intakeAmount; i++) {
-               const pos = ['GK', 'DEF', 'MID', 'FWD'][Math.floor(Math.random() * 4)];
-               // Variasi bakat (Wonderkid vs Reguler vs Flop)
-               const talentRoll = Math.random();
-               let potBonus = 5 + Math.floor(Math.random() * 10); // Default reguler (5-15)
-               if (talentRoll > 0.9) {
-                 potBonus = 15 + Math.floor(Math.random() * 15); // Wonderkid (15-30)
-               } else if (talentRoll < 0.2) {
-                 potBonus = Math.floor(Math.random() * 5); // Flop/Low potential (0-5)
-               }
-
-               const newOvr = Math.max(40, team.reputation - 25 - Math.floor(Math.random() * 15)); 
-               const newPlayer: Player = {
-                 id: `p-regen-${Date.now()}-${team.id}-${i}`,
-                 name: generateFMName(team.nationId),
-                 nationId: team.nationId,
-                 age: 16,
-                 position: pos as any,
-                 overall: newOvr,
-                 potential: Math.min(99, newOvr + potBonus),
-                 teamId: team.id,
-                 value: newOvr * 10000,
-                 wage: newOvr * 100,
-                 trait: 'Professional' // Default fallback
-               };
-               updatedPlayers.push(newPlayer);
-             }
-           });
-           
-           newDatabase = { ...newDatabase, players: updatedPlayers };
-        }
         
-        // International Break & FIFA Virus (Fitur 11 & 14)
         const dateString = nextDay.toISOString().split('T')[0];
         if (dateString.endsWith('-03-25') || dateString.endsWith('-09-10') || dateString.endsWith('-11-15')) {
            if (state.playerTeamId && state.playerTeamId !== 'UNEMPLOYED' && newDatabase) {
@@ -548,18 +524,16 @@ export const useGameStore = create<GameState>()(
                     type: 'info'
                  });
                  
-                 // Apply Fatigue & FIFA Virus
                  nationalPlayers.forEach(p => {
                     let existing = newStatuses.find(s => s.playerId === p.id);
                     if (!existing) {
                        existing = { playerId: p.id, fatigue: 100, morale: 80, injured: false, injuryDaysLeft: 0, suspended: false, suspendedGamesLeft: 0 };
                        newStatuses.push(existing);
                     }
-                    existing.fatigue = Math.max(0, existing.fatigue - 40); // Kelelahan timnas
+                    existing.fatigue = Math.max(0, existing.fatigue - 40);
                     
-                    // FIFA Virus (20% chance cedera ringan/menengah)
                     if (Math.random() < 0.2 && !existing.injured) {
-                       const dur = 3 + Math.floor(Math.random() * 14); // 3-17 hari
+                       const dur = 3 + Math.floor(Math.random() * 14);
                        existing.injured = true;
                        existing.injuryDaysLeft = dur;
                        
@@ -578,10 +552,8 @@ export const useGameStore = create<GameState>()(
            }
         }
         
-        // Recover fatigue harian lambat
         newStatuses = newStatuses.map(s => ({ ...s, fatigue: Math.min(100, s.fatigue + 5) }));
 
-        // Auto-heal injuries & suspensions
         const updatedStatuses = newStatuses.map(ps => {
           let updated = { ...ps };
           if (updated.injured && updated.injuryDaysLeft > 0) {
@@ -598,8 +570,10 @@ export const useGameStore = create<GameState>()(
           news: newNews,
           dressingRoomAtmosphere: newAtmosphere,
           playerStatuses: updatedStatuses,
-          playerClubBalance: newBalance,
+          playerClubBalance: newBalance - (state.bankLoan > 0 ? (state.bankLoan * 0.001) : 0),
           activeSponsor: newSponsor,
+          boardConfidence: newBoardConfidence,
+          hasSultanOwner: newSultan,
           managerExperience: (state.playerTeamId && state.playerTeamId !== 'UNEMPLOYED') ? state.managerExperience + 1 : state.managerExperience,
           managerLicense: (state.playerTeamId && state.playerTeamId !== 'UNEMPLOYED' && [100, 300, 600, 1000].includes(state.managerExperience + 1)) ? 
              (state.managerExperience + 1 === 100 ? 'C' : state.managerExperience + 1 === 300 ? 'B' : state.managerExperience + 1 === 600 ? 'A' : 'Pro') 
@@ -617,8 +591,8 @@ export const useGameStore = create<GameState>()(
         managerNationality: nationality,
         managerConfederation: confederation as any,
         managerLicense: license,
-        playerTeamId: 'UNEMPLOYED', // Default pengangguran
-        managerBalance: 10000, // Modal awal 10.000
+        playerTeamId: 'UNEMPLOYED',
+        managerBalance: 10000,
         managerSalary: 0
       }),
 
@@ -628,9 +602,6 @@ export const useGameStore = create<GameState>()(
          const shuffledTeams = [...state.database.teams].sort(() => 0.5 - Math.random());
          const myLicense = state.managerLicense || 'D';
          
-         const licenseRank = { 'D': 1, 'C': 2, 'B': 3, 'A': 4, 'Pro': 5 };
-         
-         // Ambil 20 tim secara acak
          for (let i = 0; i < 20; i++) {
             const team = shuffledTeams[i];
             if (!team) continue;
@@ -638,7 +609,6 @@ export const useGameStore = create<GameState>()(
             let requiredLicense = 'Pro';
             let role = 'Head Coach';
             
-            // Randomize role to provide more opportunities for lower licenses
             const roll = Math.random();
             if (team.reputation < 55) {
                requiredLicense = roll > 0.5 ? 'D' : 'C';
@@ -666,8 +636,6 @@ export const useGameStore = create<GameState>()(
             });
          }
          
-         // Guarantee at least 5 jobs that the player's CURRENT license can accept!
-         // (If they are desperate)
          let guaranteed = 0;
          for (let i = 20; i < state.database.teams.length && guaranteed < 5; i++) {
             const team = shuffledTeams[i];
@@ -679,7 +647,7 @@ export const useGameStore = create<GameState>()(
                   team: { id: team.id, name: team.name, shortName: team.shortName },
                   league: league,
                   role: 'Head Coach',
-                  requiredLicense: myLicense, // Paskan dengan lisensi player!
+                  requiredLicense: myLicense,
                   baseWage: Math.floor(team.reputation * 100),
                   reputation: team.reputation
                });
@@ -694,7 +662,7 @@ export const useGameStore = create<GameState>()(
         let initialBalance = 0;
         if (state.database) {
            const t = state.database.teams.find(x => x.id === teamId);
-           if (t) initialBalance = t.transferBudget + 20000000; // Transfer budget + cash in bank
+           if (t) initialBalance = t.transferBudget + 20000000;
         }
         return {
           playerTeamId: teamId,
@@ -702,7 +670,7 @@ export const useGameStore = create<GameState>()(
           managerSalary: salary,
           playerClubBalance: initialBalance,
           activeSponsor: null,
-          tacticalFamiliarity: 30, // Mulai dari awal = buta taktik
+          tacticalFamiliarity: 30,
           managerBannedGamesLeft: 0,
           hasSultanOwner: false
         };
@@ -717,19 +685,13 @@ export const useGameStore = create<GameState>()(
         let newInbox = [...state.inboxMessages];
         let newBalance = state.playerClubBalance;
 
-        // 2. Financials from match
         if (state.database && state.playerTeamId && state.playerTeamId !== 'UNEMPLOYED') {
            const myTeam = state.database.teams.find(t => t.id === state.playerTeamId);
            if (myTeam) {
-              // Jika main di kandang
               if (result.homeTeamId === myTeam.id) {
                  const ticketPrice = myTeam.ticketPrice || 45;
-                 
-                 // Ultras Boycott (Fitur 12)
-                 let attendanceRatio = 0.6 + (Math.random() * 0.4); // 60-100% full
-                 if (state.boardConfidence < 30) {
-                    attendanceRatio = 0.1; // Ultras boikot, stadion kosong!
-                 }
+                 let attendanceRatio = 0.6 + (Math.random() * 0.4);
+                 if (state.boardConfidence < 30) attendanceRatio = 0.1;
                  
                  const attendance = Math.floor((myTeam.stadiumCapacity || 20000) * attendanceRatio);
                  const revenue = attendance * ticketPrice;
@@ -748,18 +710,14 @@ export const useGameStore = create<GameState>()(
                  }
               }
 
-              // Sponsor Bonus Win
               if (state.activeSponsor) {
                  const isWin = (result.homeTeamId === myTeam.id && result.homeScore > result.awayScore) || 
                                (result.awayTeamId === myTeam.id && result.awayScore > result.homeScore);
-                 if (isWin) {
-                    newBalance += state.activeSponsor.bonusPerWin;
-                 }
+                 if (isWin) newBalance += state.activeSponsor.bonusPerWin;
               }
            }
         }
 
-        // Update standings
         const newStandings = { ...state.standings };
         const updateTeam = (teamId: string, scored: number, conceded: number) => {
           const prev = newStandings[teamId] || { teamId, played: 0, won: 0, drawn: 0, lost: 0, goalsFor: 0, goalsAgainst: 0, points: 0 };
@@ -780,7 +738,6 @@ export const useGameStore = create<GameState>()(
         updateTeam(result.homeTeamId, result.homeScore, result.awayScore);
         updateTeam(result.awayTeamId, result.awayScore, result.homeScore);
 
-        // Board Confidence Update
         let boardDelta = 0;
         const myTeamGame = result.homeTeamId === state.playerTeamId || result.awayTeamId === state.playerTeamId;
         if (myTeamGame) {
@@ -790,13 +747,9 @@ export const useGameStore = create<GameState>()(
           
           if (myScore > oppScore) boardDelta = 3;
           else if (myScore === oppScore) boardDelta = -1;
-          else {
-             // Sultan Takeover Effect (Fitur 9): Sultan tidak mentolerir kekalahan!
-             boardDelta = state.hasSultanOwner ? -15 : -8;
-          }
+          else boardDelta = state.hasSultanOwner ? -15 : -8;
         };
 
-        // Matchday Fatigue Deduction & Burnout Logic
         let newStatuses = [...state.playerStatuses];
         let newFamiliarity = state.tacticalFamiliarity;
         let newBannedGames = state.managerBannedGamesLeft;
@@ -804,7 +757,7 @@ export const useGameStore = create<GameState>()(
         if (state.database && state.playerTeamId) {
            const isMyMatch = result.homeTeamId === state.playerTeamId || result.awayTeamId === state.playerTeamId;
            if (isMyMatch) {
-              newFamiliarity = Math.min(100, newFamiliarity + 5); // Naik per laga
+              newFamiliarity = Math.min(100, newFamiliarity + 5);
               newBannedGames = Math.max(0, newBannedGames - 1);
            }
            const matchPlayers = state.database.players.filter(p => p.teamId === result.homeTeamId || p.teamId === result.awayTeamId);
@@ -814,18 +767,12 @@ export const useGameStore = create<GameState>()(
                  existing = { playerId: p.id, fatigue: 100, morale: 80, injured: false, injuryDaysLeft: 0, suspended: false, suspendedGamesLeft: 0 };
                  newStatuses.push(existing);
               }
-              
-              // Burnout check
               if (existing.fatigue < 60 && Math.random() < 0.1 && p.teamId === state.playerTeamId) {
-                 // Pemain kelelahan dipaksa main -> Potential drop permanen
                  newDatabase = { ...newDatabase!, players: newDatabase!.players.map(pl => {
                     if (pl.id === p.id) return { ...pl, potential: Math.max(30, pl.potential - 1) };
                     return pl;
                  })};
-                 // Tidak pakai notif inbox untuk menghemat spam, namun berefek senyap
               }
-              
-              // Deduct fatigue by 30
               existing.fatigue = Math.max(0, existing.fatigue - 30);
            });
         }
@@ -891,7 +838,7 @@ export const useGameStore = create<GameState>()(
       setPlayerTactics: (formation, style, lineup) => set((state) => {
          let familiarityDrop = 0;
          if (state.playerTactics.formation !== formation || state.playerTactics.style !== style) {
-            familiarityDrop = 40; // Ganti taktik besar besaran merusak chemistry
+            familiarityDrop = 40;
          }
          return {
             playerTactics: { formation, style, lineup },
@@ -932,9 +879,8 @@ export const useGameStore = create<GameState>()(
           if (!targetPlayer) return state;
           
           let finalCost = cost;
-          // Bidding War & Agen Serakah (Fitur 19 & 8)
           if (targetPlayer.potential > 85 && !isLoan && Math.random() < 0.3) {
-             finalCost = cost * 2 + 10000000; // Harga melonjak 2x + Agen minta fee 10M
+             finalCost = cost * 2 + 10000000;
              outcome.isBiddingWar = true;
              outcome.newCost = finalCost;
           }
@@ -972,7 +918,6 @@ export const useGameStore = create<GameState>()(
       applyInjury: (playerId, duration, isACL) => set(state => {
         let finalDuration = duration;
         
-        // Medical Facility discount
         if (state.database && state.playerTeamId) {
            const player = state.database.players.find(p => p.id === playerId);
            if (player && player.teamId === state.playerTeamId) {
@@ -1043,34 +988,39 @@ export const useGameStore = create<GameState>()(
          };
       }),
 
-      applyManagerBan: (games) => set(state => ({
-         managerBannedGamesLeft: state.managerBannedGamesLeft + games
-      }))
+      applyManagerBan: (games) => set({ managerBannedGamesLeft: games }),
 
+      takeLoan: (amount) => set((state) => {
+         if (state.bankLoan > 0) return {};
+         if (!state.playerTeamId || state.playerTeamId === 'UNEMPLOYED') return {};
+         
+         let db = state.database;
+         if (!db) return {};
+         const myTeamIndex = db.teams.findIndex(t => t.id === state.playerTeamId);
+         if (myTeamIndex > -1) {
+            db.teams[myTeamIndex].transferBudget += amount;
+            return { bankLoan: amount, database: db };
+         }
+         return {};
+      }),
+
+      repayLoan: (amount) => set((state) => {
+         if (state.bankLoan <= 0) return {};
+         if (!state.playerTeamId || state.playerTeamId === 'UNEMPLOYED') return {};
+         
+         let db = state.database;
+         if (!db) return {};
+         const myTeamIndex = db.teams.findIndex(t => t.id === state.playerTeamId);
+         if (myTeamIndex > -1 && db.teams[myTeamIndex].transferBudget >= amount) {
+            db.teams[myTeamIndex].transferBudget -= amount;
+            return { bankLoan: Math.max(0, state.bankLoan - amount), database: db };
+         }
+         return {};
+      })
     }),
     {
       name: 'globalfm-save',
-      partialize: (state) => ({
-        currentDate: state.currentDate,
-        playerTeamId: state.playerTeamId,
-        managerName: state.managerName,
-        managerNationality: state.managerNationality,
-        managerConfederation: state.managerConfederation,
-        managerLicense: state.managerLicense,
-        managerRole: state.managerRole,
-        managerExperience: state.managerExperience,
-        language: state.language,
-        boardConfidence: state.boardConfidence,
-        matchResults: state.matchResults,
-        standings: state.standings,
-        playerStatuses: state.playerStatuses,
-        inboxMessages: state.inboxMessages,
-        news: state.news,
-        playerTactics: state.playerTactics,
-        scoutedPlayerIds: state.scoutedPlayerIds,
-        availableJobs: state.availableJobs,
-      }),
-
+      storage: createJSONStorage(() => storage),
     }
   )
 );

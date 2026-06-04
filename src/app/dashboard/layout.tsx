@@ -1,7 +1,7 @@
 'use client';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { Calendar, Users, Home, LayoutDashboard, ArrowRightLeft, Settings, Trophy, UserCircle, Briefcase, Mail, CalendarDays, Search, Newspaper } from 'lucide-react';
+import { Calendar, Users, Home, LayoutDashboard, ArrowRightLeft, Settings, Trophy, UserCircle, Briefcase, Mail, CalendarDays, Search, Newspaper, Banknote } from 'lucide-react';
 import { useGameStore } from '@/lib/store/gameStore';
 import { useEffect, useState } from 'react';
 
@@ -66,7 +66,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     { name: 'Squad', icon: Users, path: '/dashboard/squad', show: !isUnemployed },
     { name: 'Tactics', icon: LayoutDashboard, path: '/dashboard/tactics', show: !isUnemployed },
     { name: 'Transfers', icon: ArrowRightLeft, path: '/dashboard/transfers', show: !isUnemployed },
-    { name: 'Finances', icon: Settings, path: '/dashboard/finances', show: !isUnemployed },
+    { name: 'Finances', icon: Banknote, path: '/dashboard/finances', show: !isUnemployed },
+    { name: 'Competitions', icon: Trophy, path: '/dashboard/competitions', show: true },
     { name: 'Schedule', icon: Calendar, path: '/dashboard/schedule', show: !isUnemployed },
     { name: 'Media', icon: Newspaper, path: '/dashboard/media', show: true },
     { name: 'Settings', icon: Settings, path: '/dashboard/settings', show: true },
