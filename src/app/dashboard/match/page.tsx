@@ -55,10 +55,23 @@ export default function MatchSimulationPage() {
   const [awayTeam, setAwayTeam] = useState<Team | null>(null);
   const eventsEndRef = useRef<HTMLDivElement>(null);
   
-  // 2D Dots Engine State
+  // 2D Dots Engine State - Formasi 4-3-3 Default
+  const HOME_BASE = [
+    { x: 5, y: 50 }, // GK
+    { x: 20, y: 20 }, { x: 15, y: 40 }, { x: 15, y: 60 }, { x: 20, y: 80 }, // DEF
+    { x: 40, y: 30 }, { x: 35, y: 50 }, { x: 40, y: 70 }, // MID
+    { x: 60, y: 25 }, { x: 65, y: 50 }, { x: 60, y: 75 }, // FWD
+  ];
+  const AWAY_BASE = [
+    { x: 95, y: 50 }, // GK
+    { x: 80, y: 80 }, { x: 85, y: 60 }, { x: 85, y: 40 }, { x: 80, y: 20 }, // DEF
+    { x: 60, y: 70 }, { x: 65, y: 50 }, { x: 60, y: 30 }, // MID
+    { x: 40, y: 75 }, { x: 35, y: 50 }, { x: 40, y: 25 }, // FWD
+  ];
+
   const [ballPos, setBallPos] = useState({ x: 50, y: 50 });
-  const [homeDots, setHomeDots] = useState(Array.from({length: 11}, () => ({x: 25, y: Math.random() * 80 + 10})));
-  const [awayDots, setAwayDots] = useState(Array.from({length: 11}, () => ({x: 75, y: Math.random() * 80 + 10})));
+  const [homeDots, setHomeDots] = useState(HOME_BASE);
+  const [awayDots, setAwayDots] = useState(AWAY_BASE);
 
   // Animasi Pergerakan 2D Dots
   useEffect(() => {
@@ -68,24 +81,34 @@ export default function MatchSimulationPage() {
       const lastEvent = liveEvents.length > 0 ? liveEvents[liveEvents.length - 1] : null;
       
       let targetZoneX = 50;
+      let targetZoneY = 50;
       if (lastEvent) {
-         if (lastEvent.teamId === homeTeam?.id) targetZoneX = 80; // Home menyerang ke kanan
-         else if (lastEvent.teamId === awayTeam?.id) targetZoneX = 20; // Away menyerang ke kiri
+         if (lastEvent.teamId === homeTeam?.id) {
+           targetZoneX = 75 + (Math.random() * 15); // Home menyerang ke kanan
+           targetZoneY = 20 + (Math.random() * 60);
+         } else if (lastEvent.teamId === awayTeam?.id) {
+           targetZoneX = 10 + (Math.random() * 15); // Away menyerang ke kiri
+           targetZoneY = 20 + (Math.random() * 60);
+         }
       }
 
-      setHomeDots(prev => prev.map(dot => ({
-        x: Math.max(5, Math.min(95, dot.x + (Math.random() * 10 - 5) + (targetZoneX > 50 ? 2 : -1))),
-        y: Math.max(5, Math.min(95, dot.y + (Math.random() * 8 - 4)))
+      // Hitung pergeseran global tim berdasarkan posisi bola
+      const homeShiftX = (targetZoneX - 50) * 0.4;
+      const awayShiftX = (targetZoneX - 50) * 0.4;
+
+      setHomeDots(HOME_BASE.map(base => ({
+        x: Math.max(2, Math.min(98, base.x + homeShiftX + (Math.random() * 6 - 3))),
+        y: Math.max(2, Math.min(98, base.y + (Math.random() * 6 - 3) + (targetZoneY - 50) * 0.2))
       })));
 
-      setAwayDots(prev => prev.map(dot => ({
-        x: Math.max(5, Math.min(95, dot.x + (Math.random() * 10 - 5) + (targetZoneX < 50 ? -2 : 1))),
-        y: Math.max(5, Math.min(95, dot.y + (Math.random() * 8 - 4)))
+      setAwayDots(AWAY_BASE.map(base => ({
+        x: Math.max(2, Math.min(98, base.x + awayShiftX + (Math.random() * 6 - 3))),
+        y: Math.max(2, Math.min(98, base.y + (Math.random() * 6 - 3) + (targetZoneY - 50) * 0.2))
       })));
 
       setBallPos({
-        x: targetZoneX + (Math.random() * 10 - 5),
-        y: 50 + (Math.random() * 40 - 20)
+        x: targetZoneX,
+        y: targetZoneY
       });
 
     }, 800);
