@@ -40,9 +40,7 @@ export default function JobCenterPage() {
   const blacklistedClubs = useGameStore(state => state.blacklistedClubs || []);
   const acceptJobOffer = useGameStore(state => state.acceptJobOffer);
   const rejectJobOffer = useGameStore(state => state.rejectJobOffer);
-
-  const [jobs, setJobs] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const availableJobs = useGameStore(state => state.availableJobs || []);
 
   // Interview State
   const [interviewJob, setInterviewJob] = useState<any>(null);
@@ -52,53 +50,8 @@ export default function JobCenterPage() {
   const [isAccepted, setIsAccepted] = useState(false);
   const [negotiatedWage, setNegotiatedWage] = useState(0);
 
-  useEffect(() => {
-    if (database) {
-      const availableJobs: any[] = [];
-      const shuffledTeams = [...database.teams].sort(() => 0.5 - Math.random());
-      
-      for (let i = 0; i < 24; i++) {
-        const team = shuffledTeams[i];
-        if (!team) continue;
-
-        let role = 'Head Coach';
-        let requiredLicense = 'Pro';
-
-        if (team.reputation > 80) {
-          role = 'Head Coach';
-          requiredLicense = 'Pro';
-        } else if (team.reputation > 70) {
-          role = 'Head Coach';
-          requiredLicense = 'A';
-        } else if (team.reputation > 60) {
-          role = 'Head Coach';
-          requiredLicense = 'B';
-        } else {
-          role = 'Head Coach';
-          requiredLicense = 'D';
-        }
-
-        const league = database.leagues.find(l => l.id === team.leagueId);
-        
-        availableJobs.push({
-          id: `job-${i}`,
-          team: {
-            id: team.id,
-            name: team.name,
-            shortName: team.shortName
-          },
-          league: league,
-          role,
-          requiredLicense,
-          baseWage: (team.reputation * 100),
-          reputation: team.reputation
-        });
-      }
-
-      setJobs(availableJobs.sort((a, b) => b.reputation - a.reputation));
-      setLoading(false);
-    }
-  }, [database]);
+  const jobs = availableJobs;
+  const loading = !database;
 
   if (!database || loading) return <div className="p-12 text-center text-slate-500">Loading Job Center...</div>;
 

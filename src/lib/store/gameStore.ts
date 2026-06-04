@@ -67,6 +67,10 @@ interface GameState {
   blacklistedClubs: string[];
   dressingRoomAtmosphere: number; // 0-100
 
+  // Job Center
+  availableJobs: any[];
+  generateJobs: () => void;
+
   // Database
   database: Database | null;
 
@@ -137,6 +141,7 @@ export const useGameStore = create<GameState>()(
       managerSalary: 0,
       blacklistedClubs: [],
       dressingRoomAtmosphere: 80,
+      availableJobs: [],
       database: null,
       matchResults: [],
       standings: {},
@@ -154,7 +159,10 @@ export const useGameStore = create<GameState>()(
       managerBannedGamesLeft: 0,
       hasSultanOwner: false,
 
-      setDatabase: (db) => set({ database: db }),
+      setDatabase: (db) => {
+         set({ database: db });
+         get().generateJobs();
+      },
       setLanguage: (lang) => set({ language: lang }),
 
       advanceDay: () => set((state) => {
@@ -300,7 +308,12 @@ export const useGameStore = create<GameState>()(
         let newBalance = state.playerClubBalance;
         let newSponsor = state.activeSponsor;
 
-        // Weekly Salary payout (Setiap hari Minggu)
+        // 2. Refresh Jobs seminggu sekali (Tiap hari Senin)
+        if (nextDay.getDay() === 1) {
+           get().generateJobs();
+        }
+
+        // 3. Financials & Salary (Mingguan setiap hari Minggu)
         if (nextDay.getDay() === 0) {
            if (state.playerTeamId && state.managerSalary > 0) {
               state.managerBalance += state.managerSalary;
@@ -531,6 +544,74 @@ export const useGameStore = create<GameState>()(
         playerTeamId: 'UNEMPLOYED', // Default pengangguran
         managerBalance: 10000, // Modal awal 10.000
         managerSalary: 0
+      }),
+
+      generateJobs: () => set(state => {
+         if (!state.database) return state;
+         const newJobs: any[] = [];
+         const shuffledTeams = [...state.database.teams].sort(() => 0.5 - Math.random());
+         const myLicense = state.managerLicense || 'D';
+         
+         const licenseRank = { 'D': 1, 'C': 2, 'B': 3, 'A': 4, 'Pro': 5 };
+         
+         // Ambil 20 tim secara acak
+         for (let i = 0; i < 20; i++) {
+            const team = shuffledTeams[i];
+            if (!team) continue;
+            
+            let requiredLicense = 'Pro';
+            let role = 'Head Coach';
+            
+            // Randomize role to provide more opportunities for lower licenses
+            const roll = Math.random();
+            if (team.reputation < 55) {
+               requiredLicense = roll > 0.5 ? 'D' : 'C';
+            } else if (team.reputation < 65) {
+               requiredLicense = roll > 0.3 ? 'C' : 'B';
+            } else if (team.reputation < 75) {
+               if (roll > 0.7) { role = 'Assistant Manager'; requiredLicense = 'B'; }
+               else { requiredLicense = 'A'; }
+            } else {
+               if (roll > 0.8) { role = 'Academy Coach'; requiredLicense = 'C'; }
+               else if (roll > 0.5) { role = 'Assistant Manager'; requiredLicense = 'A'; }
+               else { requiredLicense = 'Pro'; }
+            }
+
+            const league = state.database.leagues.find(l => l.id === team.leagueId);
+            
+            newJobs.push({
+               id: `job-${Date.now()}-${i}`,
+               team: { id: team.id, name: team.name, shortName: team.shortName },
+               league: league,
+               role,
+               requiredLicense,
+               baseWage: Math.floor(team.reputation * 120 * (role === 'Head Coach' ? 1 : 0.5)),
+               reputation: team.reputation
+            });
+         }
+         
+         // Guarantee at least 5 jobs that the player's CURRENT license can accept!
+         // (If they are desperate)
+         let guaranteed = 0;
+         for (let i = 20; i < state.database.teams.length && guaranteed < 5; i++) {
+            const team = shuffledTeams[i];
+            if (!team) continue;
+            if (team.reputation < 55) {
+               const league = state.database.leagues.find(l => l.id === team.leagueId);
+               newJobs.push({
+                  id: `job-guaranteed-${Date.now()}-${i}`,
+                  team: { id: team.id, name: team.name, shortName: team.shortName },
+                  league: league,
+                  role: 'Head Coach',
+                  requiredLicense: myLicense, // Paskan dengan lisensi player!
+                  baseWage: Math.floor(team.reputation * 100),
+                  reputation: team.reputation
+               });
+               guaranteed++;
+            }
+         }
+
+         return { availableJobs: newJobs.sort((a, b) => b.reputation - a.reputation) };
       }),
       
       acceptJobOffer: (teamId, role, salary) => set((state) => {
@@ -909,6 +990,7 @@ export const useGameStore = create<GameState>()(
         inboxMessages: state.inboxMessages,
         playerTactics: state.playerTactics,
         scoutedPlayerIds: state.scoutedPlayerIds,
+        availableJobs: state.availableJobs,
       }),
 
     }
