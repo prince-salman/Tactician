@@ -31,6 +31,26 @@ export default function Home() {
           >
             LOAD GAME
           </Link>
+          <label className="px-8 py-4 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold rounded-xl transition-all hover:scale-105 active:scale-95 border border-slate-700 cursor-pointer">
+            IMPORT SAVE
+            <input type="file" accept=".json" className="hidden" onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (!file) return;
+              const reader = new FileReader();
+              reader.onload = (event) => {
+                try {
+                  const result = event.target?.result as string;
+                  JSON.parse(result);
+                  localStorage.setItem('globalfm-save', result);
+                  alert('Save data berhasil diimpor!');
+                  window.location.reload();
+                } catch (err) {
+                  alert('File save data rusak atau tidak valid!');
+                }
+              };
+              reader.readAsText(file);
+            }} />
+          </label>
         </div>
         
         <div className="pt-12 text-slate-500 text-sm">

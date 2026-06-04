@@ -14,6 +14,37 @@ export default function SettingsPage() {
     }
   };
 
+  const handleExport = () => {
+    const data = localStorage.getItem('globalfm-save');
+    if (!data) return alert('Tidak ada save data yang ditemukan.');
+    const blob = new Blob([data], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `tactician_save_${new Date().toISOString().split('T')[0]}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const result = event.target?.result as string;
+        // Validate if it's a valid JSON
+        JSON.parse(result);
+        localStorage.setItem('globalfm-save', result);
+        alert('Save data berhasil diimpor! Game akan dimuat ulang.');
+        window.location.href = '/dashboard';
+      } catch (err) {
+        alert('File save data rusak atau tidak valid!');
+      }
+    };
+    reader.readAsText(file);
+  };
+
   return (
     <div className="max-w-3xl mx-auto space-y-8">
       <header>
@@ -32,6 +63,20 @@ export default function SettingsPage() {
             <option value="id">Bahasa Indonesia</option>
             <option value="en">English (Coming Soon)</option>
           </select>
+        </div>
+
+        <div className="pt-6 border-t border-slate-800">
+          <h2 className="text-xl font-bold text-blue-400 mb-4">Transfer Save Data (Lintas Device)</h2>
+          <p className="text-slate-400 text-sm mb-4">Gunakan fitur ini untuk memindahkan save data Anda ke HP atau PC lain tanpa perlu akun.</p>
+          <div className="flex gap-4">
+             <button onClick={handleExport} className="px-4 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-600 rounded-lg text-sm font-bold text-white transition-colors">
+                ⬇️ Export Save (.json)
+             </button>
+             <label className="px-4 py-2 bg-blue-900/50 hover:bg-blue-600 border border-blue-800 hover:border-blue-500 rounded-lg text-sm font-bold text-white transition-colors cursor-pointer flex items-center">
+                ⬆️ Import Save
+                <input type="file" accept=".json" onChange={handleImport} className="hidden" />
+             </label>
+          </div>
         </div>
 
         <div className="pt-6 border-t border-slate-800">

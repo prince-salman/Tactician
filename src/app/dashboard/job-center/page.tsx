@@ -215,7 +215,8 @@ export default function JobCenterPage() {
       {/* Job Listings */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {jobs.map(job => {
-          const requiredRank = licenseRank[job.requiredLicense as keyof typeof licenseRank];
+          const currentRank = licenseRank[managerLicense as keyof typeof licenseRank] || 1;
+          const requiredRank = licenseRank[job.requiredLicense as keyof typeof licenseRank] || 1;
           const isQualified = currentRank >= requiredRank;
           const isBlacklisted = blacklistedClubs.includes(job.team.id);
 

@@ -3,28 +3,7 @@ import path from 'path';
 import { generateFMName } from '../engine/nameGenerator';
 import { Player, Team, League } from '../../types';
 
-const NATIONS = [
-  "Afganistan", "Afrika Selatan", "Albania", "Aljazair", "Amerika Serikat", "Andorra", "Angola", "Anguilla", "Antigua dan Barbuda", "Arab Saudi",
-  "Argentina", "Armenia", "Aruba", "Australia", "Austria", "Azerbaijan", "Bahama", "Bahrain", "Bangladesh", "Barbados",
-  "Belanda", "Belarus", "Belgia", "Belize", "Benin", "Bermuda", "Bhutan", "Bolivia", "Bosnia dan Herzegovina", "Botswana",
-  "Brasil", "Brunei Darussalam", "Bulgaria", "Burkina Faso", "Burundi", "Chad", "Chili", "China (Tiongkok)", "Curacao", "Denmark",
-  "Finlandia", "Gabon", "Gambia", "Georgia", "Ghana", "Gibraltar", "Grenada", "Guam", "Guatemala", "Guinea",
-  "Guinea Khatulistiwa", "Guinea-Bissau", "Guyana", "Haiti", "Honduras", "Hong Kong", "Hungaria", "India", "Indonesia", "Inggris",
-  "Irak", "Iran", "Irlandia", "Irlandia Utara", "Islandia", "Israel", "Italia", "Jamaika", "Jepang", "Jerman",
-  "Kaledonia Baru", "Kamboja", "Kamerun", "Kanada", "Kazakhstan", "Kenya", "Kepulauan Cayman", "Kepulauan Cook", "Kepulauan Faroe", "Kepulauan Solomon",
-  "Kepulauan Turks dan Caicos", "Kepulauan Virgin Amerika Serikat", "Kepulauan Virgin Britania Raya", "Kirgistan", "Kolombia", "Komoro", "Kongo", "Korea Selatan", "Korea Utara", "Kosovo",
-  "Kosta Rika", "Kroasia", "Kuba", "Kuwait", "Laos", "Latvia", "Lebanon", "Lesotho", "Liberia", "Libya",
-  "Liechtenstein", "Lituania", "Luksemburg", "Madagaskar", "Makau", "Makedonia Utara", "Maladewa", "Malawi", "Malaysia", "Mali",
-  "Malta", "Maroko", "Mauritania", "Mauritius", "Meksiko", "Mesir", "Moldova", "Mongolia", "Montenegro", "Montserrat",
-  "Mozambik", "Myanmar", "Namibia", "Nepal", "Niger", "Nigeria", "Nikaragua", "Norwegia", "Oman", "Pakistan",
-  "Palestina", "Panama", "Pantai Gading", "Papua Nugini", "Paraguay", "Peru", "Polandia", "Portugal", "Prancis", "Puerto Riko",
-  "Qatar", "Republik Afrika Tengah", "Republik Ceko", "Republik Demokratik Kongo", "Republik Dominika", "Rumania", "Rusia", "Rwanda", "Samoa", "Samoa Amerika",
-  "San Marino", "Sao Tome dan Principe", "Selandia Baru", "Senegal", "Serbia", "Seychelles", "Sierra Leone", "Singapura", "Siprus", "Skotlandia",
-  "Slovakia", "Slovenia", "Somalia", "Spanyol", "Sri Lanka", "St. Kitts dan Nevis", "St. Lucia", "St. Vincent dan Grenadines", "Sudan", "Sudan Selatan",
-  "Suriah", "Suriname", "Swedia", "Swiss", "Tahiti", "Taiwan", "Tajikistan", "Tanjung Verde", "Tanzania", "Thailand",
-  "Timor Leste", "Togo", "Tonga", "Trinidad dan Tobago", "Tunisia", "Turki", "Turkmenistan", "Uganda", "Ukraina", "Uni Emirat Arab",
-  "Uruguay", "Uzbekistan", "Vanuatu", "Venezuela", "Vietnam", "Wales", "Yaman", "Yordania", "Yunani", "Zambia", "Zimbabwe"
-];
+import { NATIONS_211 } from './nations';
 
 const firstNames = ["James", "John", "Robert", "Michael", "William", "David", "Richard", "Joseph", "Thomas", "Charles", "Leo", "Cristiano", "Kylian", "Erling", "Kevin", "Mohamed", "Virgil", "Harry"];
 const lastNames = ["Smith", "Johnson", "Williams", "Brown", "Jones", "Garcia", "Miller", "Davis", "Rodriguez", "Martinez", "Messi", "Ronaldo", "Mbappe", "Haaland", "De Bruyne", "Salah", "van Dijk", "Kane"];
@@ -119,10 +98,11 @@ async function run() {
   };
 
   let totalPlayers = 0;
+  let teamCounter = 0;
 
-  for (const nation of NATIONS) {
-    const nationId = nation;
-    const confed = getConfederation(nation);
+  for (const nation of NATIONS_211) {
+    const nationId = nation.id;
+    const confed = getConfederation(nationId);
     
     // 1. Create League & Cup
     const leagueId = `L-${generateId()}`;
@@ -130,7 +110,7 @@ async function run() {
     
     db.leagues.push({
       id: leagueId,
-      name: `Liga Utama ${nation}`,
+      name: `Liga Utama ${nation.name}`,
       nationId: nationId,
       confederation: confed,
       level: 1,
@@ -139,7 +119,7 @@ async function run() {
     
     db.leagues.push({
       id: cupId,
-      name: `Piala ${nation}`,
+      name: `Piala ${nation.name}`,
       nationId: nationId,
       confederation: confed,
       level: 1,
@@ -148,10 +128,10 @@ async function run() {
 
     // 2. Create National Teams
     const nationalTeams: { cat: 'SENIOR'|'U23'|'U19'|'U17', name: string, short: string }[] = [
-      { cat: 'SENIOR', name: `Timnas ${nation}`, short: nation },
-      { cat: 'U23', name: `Timnas U23 ${nation}`, short: `${nation} U23` },
-      { cat: 'U19', name: `Timnas U19 ${nation}`, short: `${nation} U19` },
-      { cat: 'U17', name: `Timnas U17 ${nation}`, short: `${nation} U17` }
+      { cat: 'SENIOR', name: `Timnas ${nation.name}`, short: nationId },
+      { cat: 'U23', name: `Timnas U23 ${nation.name}`, short: `${nationId} U23` },
+      { cat: 'U19', name: `Timnas U19 ${nation.name}`, short: `${nationId} U19` },
+      { cat: 'U17', name: `Timnas U17 ${nation.name}`, short: `${nationId} U17` }
     ];
 
     for (const nt of nationalTeams) {
@@ -166,13 +146,12 @@ async function run() {
         isNational: true,
         nationalCategory: nt.cat,
         reputation: getRandomInt(4000, 9000),
-        stadium: `National Stadium of ${nation}`,
+        stadium: `National Stadium of ${nation.name}`,
         stadiumCapacity: getRandomInt(40000, 80000),
         transferBudget: 0,
         wageBudget: 0
       });
 
-      // Fill National Teams with generic initial players
       for (let i = 0; i < 23; i++) {
          const player = createPlayer(nationId, ntId, 60, 85, nt.cat as 'SENIOR'|'U23'|'U19'|'U17');
          db.players.push(player as Player);
@@ -183,8 +162,8 @@ async function run() {
     // 3. Create Domestic Clubs
     for (let i = 1; i <= TEAMS_PER_LEAGUE; i++) {
       const prefix = PREFIXES[Math.floor(Math.random() * PREFIXES.length)];
-      const clubName = `${prefix} ${nation} ${i}`;
-      const clubId = `T-${generateId()}`;
+      const clubName = `${prefix} ${nation.name} ${i}`;
+      const clubId = `T-${teamCounter++}`;
       
       const reputation = getRandomInt(3000, 8500);
       const budget = Math.floor(reputation * 1000);
@@ -198,7 +177,7 @@ async function run() {
         confederation: confed,
         isNational: false,
         reputation: reputation,
-        stadium: `Stadium ${i} ${nation}`,
+        stadium: `Stadium ${i} ${nation.name}`,
         stadiumCapacity: getRandomInt(10000, 60000),
         transferBudget: budget * 10,
         wageBudget: budget
@@ -213,7 +192,7 @@ async function run() {
     }
   }
 
-  console.log(`Generated ${NATIONS.length} nations.`);
+  console.log(`Generated ${NATIONS_211.length} nations.`);
   console.log(`Generated ${db.leagues.length} competitions (Leagues & Cups).`);
   console.log(`Generated ${db.teams.length} teams (Clubs & National Teams).`);
   console.log(`Generated ${totalPlayers} players.`);

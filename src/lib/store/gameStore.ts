@@ -50,15 +50,24 @@ export interface Standing {
   points: number;
 }
 
+export interface NewsItem {
+  id: string;
+  date: string;
+  title: string;
+  content: string;
+  type: 'TRANSFER' | 'MANAGER' | 'NATURALISASI' | 'GOSSIP';
+}
+
 interface GameState {
   // Manager Profile
   currentDate: string;
   playerTeamId: string | null;
   managerName: string | null;
   managerNationality: string | null;
-  managerConfederation: 'AFC' | 'UEFA' | 'CONMEBOL' | 'CONCACAF' | 'CAF' | null;
+  managerConfederation: 'UEFA' | 'CONMEBOL' | 'CONCACAF' | 'AFC' | 'CAF' | 'OFC' | null;
   managerLicense: 'D' | 'C' | 'B' | 'A' | 'Pro' | null;
-  managerRole: 'Academy Coach' | 'Assistant Manager' | 'Head Coach' | null;
+  managerRole: 'Head Coach' | 'Assistant Manager' | 'Academy Coach' | null;
+  managerExperience: number; // XP Points
   language: 'id' | 'en';
   boardConfidence: number; // 0-100
   teamReputation: number;
@@ -73,6 +82,10 @@ interface GameState {
 
   // Database
   database: Database | null;
+
+  // News & Inbox
+  inboxMessages: Inbox[];
+  news: NewsItem[];
 
   // Match & Competition
   matchResults: MatchResult[];
@@ -134,6 +147,7 @@ export const useGameStore = create<GameState>()(
       managerConfederation: null,
       managerLicense: null,
       managerRole: null,
+      managerExperience: 0,
       language: 'id',
       boardConfidence: 70,
       teamReputation: 50,
@@ -143,6 +157,7 @@ export const useGameStore = create<GameState>()(
       dressingRoomAtmosphere: 80,
       availableJobs: [],
       database: null,
+      news: [],
       matchResults: [],
       standings: {},
       playerStatuses: [],
@@ -171,11 +186,67 @@ export const useGameStore = create<GameState>()(
         
         let newDatabase = state.database;
         let newInbox = [...state.inboxMessages];
+        let newNews = [...state.news];
         let newAtmosphere = state.dressingRoomAtmosphere;
         let newStatuses = [...state.playerStatuses];
         
+        if (newDatabase) {
+           // Naturalisasi Event
+           if (Math.random() < 0.05) {
+             const somePlayer = newDatabase.players[Math.floor(Math.random() * newDatabase.players.length)];
+             const someLeague = newDatabase.leagues[Math.floor(Math.random() * newDatabase.leagues.length)];
+             const newNation = someLeague.nationId;
+             if (somePlayer.nationId !== newNation && Math.random() < 0.1 && somePlayer.overall >= 70) {
+               const oldNation = somePlayer.nationId;
+               somePlayer.nationId = newNation;
+               newNews.push({ id: `news-${Date.now()}-nat`, date: nextDay.toISOString().split('T')[0], title: `PSSI/FA BERGERAK! ${somePlayer.name} Dinaturalisasi!`, content: `Pemain keturunan ${oldNation} tersebut kini resmi berpaspor ${newNation}. Proses perpindahan federasinya segera rampung.`, type: 'NATURALISASI' });
+             }
+           }
+
+           // AI Manager & Transfers Event (Tiap Senin)
+           if (nextDay.getDay() === 1) {
+              // Gossip
+              if (Math.random() < 0.5) {
+                 const p = newDatabase.players[Math.floor(Math.random() * newDatabase.players.length)];
+                 const t = newDatabase.teams.find(tm => tm.id === p.teamId);
+                 if (t) newNews.push({ id: `news-${Date.now()}-gos`, date: nextDay.toISOString().split('T')[0], title: `GOSIP RUANG GANTI: ${t.name} Memanas?`, content: `Media lokal membocorkan adanya perpecahan setelah ${p.name} terlihat cekcok dengan pelatih di sesi latihan.`, type: 'GOSSIP' });
+              }
+
+              // Transfer
+              if (Math.random() < 0.3) {
+                 const randomClub = newDatabase.teams.filter(t => t.id !== state.playerTeamId && !t.isNational)[Math.floor(Math.random() * newDatabase.teams.length)];
+                 const randomPlayer = newDatabase.players.filter(p => p.teamId !== randomClub.id && p.teamId !== state.playerTeamId && p.overall > 70)[Math.floor(Math.random() * newDatabase.players.length)];
+                 if (randomClub && randomPlayer) {
+                    const oldClub = newDatabase.teams.find(t => t.id === randomPlayer.teamId);
+                    if (oldClub) {
+                       randomPlayer.teamId = randomClub.id;
+                       newNews.push({ id: `news-${Date.now()}-tf`, date: nextDay.toISOString().split('T')[0], title: `HERE WE GO! ${randomPlayer.name} ke ${randomClub.name}!`, content: `${oldClub.name} resmi melepas pemain bintangnya seharga ${(randomPlayer.value/1000000).toFixed(1)} Juta Euro.`, type: 'TRANSFER' });
+                    }
+                 }
+              }
+
+              // Sacking
+              if (Math.random() < 0.2) {
+                 const strugglingClub = newDatabase.teams.filter(t => t.id !== state.playerTeamId && !t.isNational && t.reputation < 6000)[Math.floor(Math.random() * newDatabase.teams.length)];
+                 if (strugglingClub) {
+                    newNews.push({ id: `news-${Date.now()}-mgr`, date: nextDay.toISOString().split('T')[0], title: `RESMI DIPECAAT! ${strugglingClub.name} Cari Manajer Baru.`, content: `Rentetan hasil buruk membuat manajemen ${strugglingClub.name} hilang kesabaran dan memecat pelatih kepalanya pagi ini.`, type: 'MANAGER' });
+                 }
+              }
+           }
+        }
+        
         // Random Drama Events (Setiap hari)
         if (state.playerTeamId && state.playerTeamId !== 'UNEMPLOYED' && newDatabase) {
+           
+           // Tambah Experience Manajer karena sedang bekerja
+           const newXp = state.managerExperience + 1;
+           let newLicense = state.managerLicense;
+           
+           if (newXp === 100 && newLicense === 'D') { newLicense = 'C'; newInbox.push({id: `msg-${Date.now()}-lic`, date: nextDay.toISOString().split('T')[0], from: 'Asosiasi Sepakbola', subject: '🎉 Lisensi Naik ke C!', body: 'Berdasarkan pengalaman Anda memanajemen tim selama 100 hari, lisensi kepelatihan Anda telah dinaikkan ke tingkat C!', read: false, type: 'success'}); }
+           else if (newXp === 300 && newLicense === 'C') { newLicense = 'B'; newInbox.push({id: `msg-${Date.now()}-lic`, date: nextDay.toISOString().split('T')[0], from: 'Asosiasi Sepakbola', subject: '🎉 Lisensi Naik ke B!', body: 'Dedikasi luar biasa! Pengalaman 300 hari mengantarkan Anda meraih Lisensi B!', read: false, type: 'success'}); }
+           else if (newXp === 600 && newLicense === 'B') { newLicense = 'A'; newInbox.push({id: `msg-${Date.now()}-lic`, date: nextDay.toISOString().split('T')[0], from: 'Asosiasi Sepakbola', subject: '🎉 Lisensi Naik ke A!', body: '600 hari bekerja keras. Anda kini memegang Lisensi A, tiket menuju klub besar!', read: false, type: 'success'}); }
+           else if (newXp === 1000 && newLicense === 'A') { newLicense = 'Pro'; newInbox.push({id: `msg-${Date.now()}-lic`, date: nextDay.toISOString().split('T')[0], from: 'Asosiasi Sepakbola', subject: '👑 LISENSI PRO DIRAIH!', body: 'Legenda sejati. 1000 hari karir. Anda telah mendapatkan gelar Lisensi Pro. Anda bebas melatih klub raksasa manapun sekarang!', read: false, type: 'success'}); }
+
            const mySquad = newDatabase.players.filter(p => p.teamId === state.playerTeamId);
            const myLeague = newDatabase.leagues.find(l => l.id === newDatabase!.teams.find(t=>t.id===state.playerTeamId)?.leagueId);
            
@@ -524,10 +595,15 @@ export const useGameStore = create<GameState>()(
           currentDate: nextDay.toISOString().split('T')[0],
           database: newDatabase,
           inboxMessages: newInbox,
+          news: newNews,
           dressingRoomAtmosphere: newAtmosphere,
           playerStatuses: updatedStatuses,
           playerClubBalance: newBalance,
-          activeSponsor: newSponsor
+          activeSponsor: newSponsor,
+          managerExperience: (state.playerTeamId && state.playerTeamId !== 'UNEMPLOYED') ? state.managerExperience + 1 : state.managerExperience,
+          managerLicense: (state.playerTeamId && state.playerTeamId !== 'UNEMPLOYED' && [100, 300, 600, 1000].includes(state.managerExperience + 1)) ? 
+             (state.managerExperience + 1 === 100 ? 'C' : state.managerExperience + 1 === 300 ? 'B' : state.managerExperience + 1 === 600 ? 'A' : 'Pro') 
+             : state.managerLicense
         };
       }),
 
@@ -982,12 +1058,14 @@ export const useGameStore = create<GameState>()(
         managerConfederation: state.managerConfederation,
         managerLicense: state.managerLicense,
         managerRole: state.managerRole,
+        managerExperience: state.managerExperience,
         language: state.language,
         boardConfidence: state.boardConfidence,
         matchResults: state.matchResults,
         standings: state.standings,
         playerStatuses: state.playerStatuses,
         inboxMessages: state.inboxMessages,
+        news: state.news,
         playerTactics: state.playerTactics,
         scoutedPlayerIds: state.scoutedPlayerIds,
         availableJobs: state.availableJobs,
