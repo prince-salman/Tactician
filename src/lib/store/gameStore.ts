@@ -599,29 +599,34 @@ export const useGameStore = create<GameState>()(
       generateJobs: () => set(state => {
          if (!state.database) return state;
          const newJobs: any[] = [];
-         const shuffledTeams = [...state.database.teams].sort(() => 0.5 - Math.random());
+         // Filter out national teams - only club jobs
+         const clubTeams = state.database.teams.filter(t => !t.isNational);
+         const shuffledTeams = [...clubTeams].sort(() => 0.5 - Math.random());
          const myLicense = state.managerLicense || 'D';
+         const licenseRank: Record<string, number> = { 'D': 1, 'C': 2, 'B': 3, 'A': 4, 'Pro': 5 };
+         const myRank = licenseRank[myLicense] || 1;
          
-         for (let i = 0; i < 20; i++) {
+         // 1. Generate 15 random jobs (may or may not be accessible)
+         for (let i = 0; i < Math.min(15, shuffledTeams.length); i++) {
             const team = shuffledTeams[i];
             if (!team) continue;
             
-            let requiredLicense = 'Pro';
+            let requiredLicense = 'D';
             let role = 'Head Coach';
             
-            const roll = Math.random();
-            if (team.reputation < 4500) {
-               requiredLicense = roll > 0.5 ? 'D' : 'C';
+            if (team.reputation < 4000) {
+               requiredLicense = 'D';
+            } else if (team.reputation < 5000) {
+               requiredLicense = Math.random() > 0.5 ? 'D' : 'C';
             } else if (team.reputation < 6000) {
-               requiredLicense = roll > 0.5 ? 'C' : 'B';
-            } else if (team.reputation < 7500) {
-               requiredLicense = roll > 0.5 ? 'B' : 'A';
-            } else if (team.reputation < 8500) {
-               requiredLicense = roll > 0.5 ? 'A' : 'Pro';
+               requiredLicense = Math.random() > 0.5 ? 'C' : 'B';
+            } else if (team.reputation < 7000) {
+               requiredLicense = Math.random() > 0.3 ? 'B' : 'A';
+            } else if (team.reputation < 8000) {
+               requiredLicense = Math.random() > 0.5 ? 'A' : 'Pro';
             } else {
-               if (roll > 0.8) { role = 'Academy Coach'; requiredLicense = 'C'; }
-               else if (roll > 0.5) { role = 'Assistant Manager'; requiredLicense = 'A'; }
-               else { requiredLicense = 'Pro'; }
+               requiredLicense = 'Pro';
+               if (Math.random() > 0.7) { role = 'Assistant Manager'; requiredLicense = 'A'; }
             }
 
             const league = state.database.leagues.find(l => l.id === team.leagueId);
@@ -637,23 +642,29 @@ export const useGameStore = create<GameState>()(
             });
          }
          
+         // 2. GUARANTEE at least 8 jobs that the player CAN apply to
+         const existingTeamIds = new Set(newJobs.map(j => j.team.id));
          let guaranteed = 0;
-         for (let i = 20; i < state.database.teams.length && guaranteed < 5; i++) {
-            const team = shuffledTeams[i];
-            if (!team) continue;
-            if (team.reputation < 5000) {
-               const league = state.database.leagues.find(l => l.id === team.leagueId);
-               newJobs.push({
-                  id: `job-guaranteed-${Date.now()}-${i}`,
-                  team: { id: team.id, name: team.name, shortName: team.shortName },
-                  league: league,
-                  role: 'Head Coach',
-                  requiredLicense: myLicense,
-                  baseWage: Math.floor(team.reputation * 100),
-                  reputation: team.reputation
-               });
-               guaranteed++;
-            }
+         
+         // Sort remaining teams by reputation ascending (smallest first = easiest to get)
+         const remainingTeams = shuffledTeams
+           .filter(t => !existingTeamIds.has(t.id))
+           .sort((a, b) => a.reputation - b.reputation);
+         
+         for (const team of remainingTeams) {
+            if (guaranteed >= 8) break;
+            
+            const league = state.database.leagues.find(l => l.id === team.leagueId);
+            newJobs.push({
+               id: `job-guaranteed-${Date.now()}-${guaranteed}`,
+               team: { id: team.id, name: team.name, shortName: team.shortName },
+               league: league,
+               role: 'Head Coach',
+               requiredLicense: myLicense, // Match player's exact license
+               baseWage: Math.floor(team.reputation * 80),
+               reputation: team.reputation
+            });
+            guaranteed++;
          }
 
          return { availableJobs: newJobs.sort((a, b) => b.reputation - a.reputation) };

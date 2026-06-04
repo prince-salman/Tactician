@@ -27,8 +27,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       return;
     }
     
-    // Jika nganggur dan mencoba akses halaman selain job-center, profile, media, inbox, atau scouting, tendang ke job-center
-    const allowedForUnemployed = ['/dashboard', '/dashboard/job-center', '/dashboard/media', '/dashboard/inbox', '/dashboard/scouting', '/dashboard/settings'];
+    // Jika nganggur, hanya boleh akses home, job-center, dan settings
+    const allowedForUnemployed = ['/dashboard', '/dashboard/job-center', '/dashboard/settings'];
     if ((!playerTeamId || playerTeamId === 'UNEMPLOYED') && !allowedForUnemployed.some(path => pathname === path || pathname.startsWith(path + '/'))) {
       router.push('/dashboard/job-center');
       return;
@@ -62,16 +62,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   const menu = [
     { name: 'Home', icon: Home, path: '/dashboard', show: true },
-    { name: 'Inbox', icon: Mail, path: '/dashboard/inbox', show: true },
-    { name: 'Scouting', icon: Search, path: '/dashboard/scouting', show: true },
     { name: 'Job Center', icon: Briefcase, path: '/dashboard/job-center', show: isUnemployed },
+    { name: 'Inbox', icon: Mail, path: '/dashboard/inbox', show: !isUnemployed },
     { name: 'Squad', icon: Users, path: '/dashboard/squad', show: !isUnemployed },
     { name: 'Tactics', icon: LayoutDashboard, path: '/dashboard/tactics', show: !isUnemployed },
     { name: 'Transfers', icon: ArrowRightLeft, path: '/dashboard/transfers', show: !isUnemployed },
+    { name: 'Scouting', icon: Search, path: '/dashboard/scouting', show: !isUnemployed },
     { name: 'Finances', icon: Banknote, path: '/dashboard/finances', show: !isUnemployed },
-    { name: 'Competitions', icon: Trophy, path: '/dashboard/competitions', show: true },
     { name: 'Schedule', icon: Calendar, path: '/dashboard/schedule', show: !isUnemployed },
-    { name: 'Media', icon: Newspaper, path: '/dashboard/media', show: true },
+    { name: 'Media', icon: Newspaper, path: '/dashboard/media', show: !isUnemployed },
     { name: 'Settings', icon: Settings, path: '/dashboard/settings', show: true },
   ];
 
