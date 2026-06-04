@@ -1,4 +1,6 @@
+'use client';
 import Link from 'next/link';
+import { Upload, Plus, Play } from 'lucide-react';
 
 export default function Home() {
   return (
@@ -21,18 +23,18 @@ export default function Home() {
         <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-8">
           <Link 
             href="/new-game" 
-            className="px-8 py-4 bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold rounded-xl transition-all hover:scale-105 active:scale-95 shadow-[0_0_40px_-10px_rgba(16,185,129,0.5)]"
+            className="px-8 py-4 bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold rounded-xl transition-all hover:scale-105 active:scale-95 shadow-[0_0_40px_-10px_rgba(16,185,129,0.5)] flex items-center justify-center gap-2"
           >
-            NEW CAREER
+            <Plus size={20} /> NEW CAREER
           </Link>
           <Link 
-            href="/load-game" 
-            className="px-8 py-4 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold rounded-xl transition-all hover:scale-105 active:scale-95 border border-slate-700"
+            href="/dashboard" 
+            className="px-8 py-4 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold rounded-xl transition-all hover:scale-105 active:scale-95 border border-slate-700 flex items-center justify-center gap-2"
           >
-            LOAD GAME
+            <Play size={20} /> CONTINUE
           </Link>
-          <label className="px-8 py-4 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold rounded-xl transition-all hover:scale-105 active:scale-95 border border-slate-700 cursor-pointer">
-            IMPORT SAVE
+          <label className="px-8 py-4 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold rounded-xl transition-all hover:scale-105 active:scale-95 border border-slate-700 cursor-pointer flex items-center justify-center gap-2">
+            <Upload size={20} /> IMPORT SAVE
             <input type="file" accept=".json" className="hidden" onChange={(e) => {
               const file = e.target.files?.[0];
               if (!file) return;
@@ -41,9 +43,14 @@ export default function Home() {
                 try {
                   const result = event.target?.result as string;
                   JSON.parse(result);
-                  localStorage.setItem('globalfm-save', result);
-                  alert('Save data berhasil diimpor!');
-                  window.location.reload();
+                  
+                  // IndexedDB import (karena di V4 kita pakai idb-keyval)
+                  import('idb-keyval').then(({ set }) => {
+                     set('globalfm-save', result).then(() => {
+                        alert('Save data berhasil diimpor!');
+                        window.location.reload();
+                     });
+                  });
                 } catch (err) {
                   alert('File save data rusak atau tidak valid!');
                 }
@@ -54,7 +61,7 @@ export default function Home() {
         </div>
         
         <div className="pt-12 text-slate-500 text-sm">
-          Database: 2026/2027 Season • Over 50,000 Players • 200+ Nations
+          Database: 2026/2027 Season | Over 100,000 Players | 211 Nations
         </div>
       </div>
     </main>

@@ -1,5 +1,6 @@
 'use client';
 import { useGameStore } from '@/lib/store/gameStore';
+import { get, set, del } from 'idb-keyval';
 import { useRouter } from 'next/navigation';
 
 export default function SettingsPage() {
@@ -7,15 +8,15 @@ export default function SettingsPage() {
   const setLanguage = useGameStore(state => state.setLanguage);
   const router = useRouter();
 
-  const handleReset = () => {
-    if (confirm('APAKAH ANDA YAKIN? Semua progres karir manajerial Anda akan HANCUR secara permanen!')) {
-      localStorage.removeItem('globalfm-save');
+  const handleReset = async () => {
+    if (confirm('APAKAH ANDA YAKIN? Semua progress karir akan terhapus secara permanen.')) {
+      await del('globalfm-save');
       window.location.href = '/';
     }
   };
 
-  const handleExport = () => {
-    const data = localStorage.getItem('globalfm-save');
+  const handleExport = async () => {
+    const data = await get('globalfm-save');
     if (!data) return alert('Tidak ada save data yang ditemukan.');
     const blob = new Blob([data], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -30,12 +31,12 @@ export default function SettingsPage() {
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = (event) => {
+    reader.onload = async (event) => {
       try {
         const result = event.target?.result as string;
         // Validate if it's a valid JSON
         JSON.parse(result);
-        localStorage.setItem('globalfm-save', result);
+        await set('globalfm-save', result);
         alert('Save data berhasil diimpor! Game akan dimuat ulang.');
         window.location.href = '/dashboard';
       } catch (err) {
