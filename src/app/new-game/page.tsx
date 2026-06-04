@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useGameStore } from '@/lib/store/gameStore';
+import { NATIONS_211 } from '@/lib/data/nations';
 
 export default function NewGamePage() {
   const router = useRouter();
@@ -14,19 +15,24 @@ export default function NewGamePage() {
   const [nationality, setNationality] = useState('Indonesia');
 
   // Confederation Mapping
-  const getConfederation = (country: string) => {
-    const afc = ['Indonesia', 'Japan', 'South Korea'];
-    const uefa = ['England', 'Spain', 'Italy', 'Germany', 'France'];
-    const conmebol = ['Brazil', 'Argentina', 'Uruguay'];
-    const concacaf = ['USA', 'Mexico'];
-    const caf = ['Egypt', 'Nigeria', 'Senegal'];
+  const getConfederation = (nation: string) => {
+    const n = nation.toLowerCase();
+    const conmebol = ['argentina', 'bolivia', 'brasil', 'chili', 'ekuador', 'kolombia', 'paraguay', 'peru', 'uruguay', 'venezuela'];
+    if (conmebol.includes(n)) return 'CONMEBOL';
     
-    if (afc.includes(country)) return 'AFC';
-    if (uefa.includes(country)) return 'UEFA';
-    if (conmebol.includes(country)) return 'CONMEBOL';
-    if (concacaf.includes(country)) return 'CONCACAF';
-    if (caf.includes(country)) return 'CAF';
-    return 'FIFA';
+    const concacaf = ['amerika serikat', 'kanada', 'meksiko', 'kosta rika', 'panama', 'honduras', 'el salvador', 'jamaika', 'haiti', 'kuba', 'trinidad dan tobago', 'guatemala', 'nikaragua', 'curacao', 'suriname', 'puerto riko', 'bermuda', 'bahama', 'barbados', 'belize', 'kepulauan cayman', 'dominika', 'republik dominika', 'grenada', 'guyana', 'montserrat', 'st. kitts dan nevis', 'st. lucia', 'st. vincent dan grenadines', 'kepulauan turks dan caicos', 'kepulauan virgin amerika serikat', 'kepulauan virgin britania raya', 'anguilla', 'antigua dan barbuda', 'aruba'];
+    if (concacaf.includes(n)) return 'CONCACAF';
+    
+    const ofc = ['selandia baru', 'fiji', 'kepulauan solomon', 'kaledonia baru', 'tahiti', 'vanuatu', 'papua nugini', 'samoa', 'samoa amerika', 'tonga', 'kepulauan cook'];
+    if (ofc.includes(n)) return 'OFC';
+    
+    const afc = ['afganistan', 'australia', 'arab saudi', 'bahrain', 'bangladesh', 'bhutan', 'brunei darussalam', 'china (tiongkok)', 'filipina', 'guam', 'hong kong', 'india', 'indonesia', 'irak', 'iran', 'jepang', 'kamboja', 'kazakhstan', 'kirgistan', 'korea selatan', 'korea utara', 'kuwait', 'laos', 'lebanon', 'makau', 'maladewa', 'malaysia', 'mongolia', 'myanmar', 'nepal', 'oman', 'pakistan', 'palestina', 'qatar', 'singapura', 'sri lanka', 'suriah', 'taiwan', 'tajikistan', 'thailand', 'timor leste', 'turkmenistan', 'uni emirat arab', 'uzbekistan', 'vietnam', 'yaman', 'yordania'];
+    if (afc.includes(n)) return 'AFC';
+    
+    const caf = ['afrika selatan', 'aljazair', 'angola', 'benin', 'botswana', 'burkina faso', 'burundi', 'chad', 'djibouti', 'eritrea', 'eswatini', 'ethiopia', 'gabon', 'gambia', 'ghana', 'guinea', 'guinea khatulistiwa', 'guinea-bissau', 'kamerun', 'kenya', 'komoro', 'kongo', 'lesotho', 'liberia', 'libya', 'madagaskar', 'malawi', 'mali', 'maroko', 'mauritania', 'mauritius', 'mesir', 'mozambik', 'namibia', 'niger', 'nigeria', 'pantai gading', 'republik afrika tengah', 'republik demokratik kongo', 'rwanda', 'sao tome dan principe', 'senegal', 'seychelles', 'sierra leone', 'somalia', 'sudan', 'sudan selatan', 'tanjung verde', 'tanzania', 'togo', 'tunisia', 'uganda', 'zambia', 'zimbabwe'];
+    if (caf.includes(n)) return 'CAF';
+    
+    return 'UEFA';
   };
 
   const confederation = getConfederation(nationality);
@@ -41,14 +47,6 @@ export default function NewGamePage() {
     // Arahkan ke Pusat Lowongan Kerja
     router.push('/dashboard/job-center');
   };
-
-  const countries = [
-    'Indonesia', 'Japan', 'South Korea',
-    'England', 'Spain', 'Italy', 'Germany', 'France',
-    'Brazil', 'Argentina', 'Uruguay',
-    'USA', 'Mexico',
-    'Egypt', 'Nigeria', 'Senegal'
-  ].sort();
 
   return (
     <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-8">
@@ -89,7 +87,7 @@ export default function NewGamePage() {
               onChange={e => setNationality(e.target.value)}
               className="w-full bg-slate-950 border border-slate-800 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-emerald-500 cursor-pointer"
             >
-              {countries.map(c => <option key={c} value={c}>{c}</option>)}
+              {NATIONS_211.map(n => <option key={n.id} value={n.name}>{n.flag} {n.name}</option>)}
             </select>
           </div>
 
