@@ -610,13 +610,14 @@ export const useGameStore = create<GameState>()(
             let role = 'Head Coach';
             
             const roll = Math.random();
-            if (team.reputation < 55) {
+            if (team.reputation < 4500) {
                requiredLicense = roll > 0.5 ? 'D' : 'C';
-            } else if (team.reputation < 65) {
-               requiredLicense = roll > 0.3 ? 'C' : 'B';
-            } else if (team.reputation < 75) {
-               if (roll > 0.7) { role = 'Assistant Manager'; requiredLicense = 'B'; }
-               else { requiredLicense = 'A'; }
+            } else if (team.reputation < 6000) {
+               requiredLicense = roll > 0.5 ? 'C' : 'B';
+            } else if (team.reputation < 7500) {
+               requiredLicense = roll > 0.5 ? 'B' : 'A';
+            } else if (team.reputation < 8500) {
+               requiredLicense = roll > 0.5 ? 'A' : 'Pro';
             } else {
                if (roll > 0.8) { role = 'Academy Coach'; requiredLicense = 'C'; }
                else if (roll > 0.5) { role = 'Assistant Manager'; requiredLicense = 'A'; }
@@ -640,7 +641,7 @@ export const useGameStore = create<GameState>()(
          for (let i = 20; i < state.database.teams.length && guaranteed < 5; i++) {
             const team = shuffledTeams[i];
             if (!team) continue;
-            if (team.reputation < 55) {
+            if (team.reputation < 5000) {
                const league = state.database.leagues.find(l => l.id === team.leagueId);
                newJobs.push({
                   id: `job-guaranteed-${Date.now()}-${i}`,

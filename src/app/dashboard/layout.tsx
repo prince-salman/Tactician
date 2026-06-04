@@ -27,7 +27,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       return;
     }
     
-    if ((!playerTeamId || playerTeamId === 'UNEMPLOYED') && !pathname.includes('/job-center') && pathname !== '/dashboard') {
+    // Jika nganggur dan mencoba akses halaman selain job-center, profile, media, inbox, atau scouting, tendang ke job-center
+    const allowedForUnemployed = ['/dashboard', '/dashboard/job-center', '/dashboard/media', '/dashboard/inbox', '/dashboard/scouting', '/dashboard/settings'];
+    if ((!playerTeamId || playerTeamId === 'UNEMPLOYED') && !allowedForUnemployed.some(path => pathname === path || pathname.startsWith(path + '/'))) {
       router.push('/dashboard/job-center');
       return;
     }
