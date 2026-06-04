@@ -97,7 +97,7 @@ export default function JobCenterPage() {
     const finalScore = interviewScore - penalty;
     
     // Required score scales with team reputation (Harder for big clubs)
-    const requiredScore = interviewJob.reputation > 80 ? 70 : (interviewJob.reputation > 60 ? 60 : 50);
+    const requiredScore = interviewJob.reputation > 7500 ? 80 : (interviewJob.reputation > 5000 ? 70 : 60);
     
     setNegotiatedWage(finalWage);
     setInterviewStage('RESULT');
