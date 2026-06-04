@@ -226,6 +226,13 @@ export default function MatchSimulationPage() {
           setShowPressConference(true);
        } else {
           advanceDay();
+          // Auto-save happens automatically via IndexedDB persist
+          addInboxMessage({
+            from: 'System',
+            subject: '💾 Game Tersimpan Otomatis',
+            body: `Progress Anda berhasil disimpan setelah pertandingan ${homeTeam?.name} vs ${awayTeam?.name}.`,
+            type: 'info'
+          });
           router.push('/dashboard');
        }
     }
