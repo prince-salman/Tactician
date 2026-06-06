@@ -80,36 +80,98 @@ export default function MatchSimulationPage() {
     const interval = setInterval(() => {
       const lastEvent = liveEvents.length > 0 ? liveEvents[liveEvents.length - 1] : null;
       
-      let targetZoneX = 50;
-      let targetZoneY = 50;
+      let possession = 'NEUTRAL';
+      let attackingZoneX = 50;
+      let attackingZoneY = 50;
+      
       if (lastEvent) {
          if (lastEvent.teamId === homeTeam?.id) {
-           targetZoneX = 75 + (Math.random() * 15); // Home menyerang ke kanan
-           targetZoneY = 20 + (Math.random() * 60);
+           possession = 'HOME';
+           attackingZoneX = 60 + (Math.random() * 30); // Home menyerang ke kanan (60-90)
+           attackingZoneY = 20 + (Math.random() * 60);
          } else if (lastEvent.teamId === awayTeam?.id) {
-           targetZoneX = 10 + (Math.random() * 15); // Away menyerang ke kiri
-           targetZoneY = 20 + (Math.random() * 60);
+           possession = 'AWAY';
+           attackingZoneX = 10 + (Math.random() * 30); // Away menyerang ke kiri (10-40)
+           attackingZoneY = 20 + (Math.random() * 60);
          }
+      } else {
+         // Default if no events yet
+         attackingZoneX = 40 + Math.random() * 20;
+         attackingZoneY = 40 + Math.random() * 20;
+         possession = Math.random() > 0.5 ? 'HOME' : 'AWAY';
       }
 
-      // Hitung pergeseran global tim berdasarkan posisi bola
-      const homeShiftX = (targetZoneX - 50) * 0.4;
-      const awayShiftX = (targetZoneX - 50) * 0.4;
-
-      setHomeDots(HOME_BASE.map(base => ({
-        x: Math.max(2, Math.min(98, base.x + homeShiftX + (Math.random() * 6 - 3))),
-        y: Math.max(2, Math.min(98, base.y + (Math.random() * 6 - 3) + (targetZoneY - 50) * 0.2))
-      })));
-
-      setAwayDots(AWAY_BASE.map(base => ({
-        x: Math.max(2, Math.min(98, base.x + awayShiftX + (Math.random() * 6 - 3))),
-        y: Math.max(2, Math.min(98, base.y + (Math.random() * 6 - 3) + (targetZoneY - 50) * 0.2))
-      })));
-
-      setBallPos({
-        x: targetZoneX,
-        y: targetZoneY
+      // Hitung pergeseran global tim
+      const homeShiftX = (attackingZoneX - 50) * 0.3;
+      const awayShiftX = (attackingZoneX - 50) * 0.3;
+      
+      // Update Home Dots
+      const newHomeDots = HOME_BASE.map((base, index) => {
+        let x = base.x + homeShiftX;
+        let y = base.y + (attackingZoneY - 50) * 0.15;
+        
+        // Jiggle and expand/contract
+        x += (Math.random() * 4 - 2);
+        y += (Math.random() * 4 - 2);
+        
+        // If home has possession, one of the attackers/midfielders gets the ball
+        if (possession === 'HOME' && index >= 5) {
+           // Snap towards the attack zone
+           x = (x * 0.4) + (attackingZoneX * 0.6);
+           y = (y * 0.4) + (attackingZoneY * 0.6);
+        }
+        
+        return { x: Math.max(2, Math.min(98, x)), y: Math.max(2, Math.min(98, y)) };
       });
+
+      // Update Away Dots
+      const newAwayDots = AWAY_BASE.map((base, index) => {
+        let x = base.x + awayShiftX;
+        let y = base.y + (attackingZoneY - 50) * 0.15;
+        
+        x += (Math.random() * 4 - 2);
+        y += (Math.random() * 4 - 2);
+        
+        if (possession === 'AWAY' && index >= 5) {
+           x = (x * 0.4) + (attackingZoneX * 0.6);
+           y = (y * 0.4) + (attackingZoneY * 0.6);
+        }
+        
+        return { x: Math.max(2, Math.min(98, x)), y: Math.max(2, Math.min(98, y)) };
+      });
+      
+      setHomeDots(newHomeDots);
+      setAwayDots(newAwayDots);
+      
+      // Assign ball to a specific player closest to the attacking zone
+      if (possession === 'HOME') {
+         // Find player closest to attack zone
+         let closest = newHomeDots[10];
+         let minDist = 999;
+         newHomeDots.forEach((dot, i) => {
+            if (i === 0) return; // Not GK
+            const dist = Math.abs(dot.x - attackingZoneX) + Math.abs(dot.y - attackingZoneY);
+            if (dist < minDist) {
+               minDist = dist;
+               closest = dot;
+            }
+         });
+         setBallPos({ x: closest.x, y: closest.y });
+      } else if (possession === 'AWAY') {
+         let closest = newAwayDots[10];
+         let minDist = 999;
+         newAwayDots.forEach((dot, i) => {
+            if (i === 0) return; // Not GK
+            const dist = Math.abs(dot.x - attackingZoneX) + Math.abs(dot.y - attackingZoneY);
+            if (dist < minDist) {
+               minDist = dist;
+               closest = dot;
+            }
+         });
+         setBallPos({ x: closest.x, y: closest.y });
+      } else {
+         setBallPos({ x: 50, y: 50 });
+      }
 
     }, 800);
 
