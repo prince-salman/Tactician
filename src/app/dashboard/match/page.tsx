@@ -73,52 +73,65 @@ export default function MatchSimulationPage() {
   const [homeDots, setHomeDots] = useState(HOME_BASE);
   const [awayDots, setAwayDots] = useState(AWAY_BASE);
 
+  const engineRef = useRef({
+    possession: 'HOME',
+    targetX: 50,
+    targetY: 50,
+    carrierIdx: 6,
+    passCooldown: 0
+  });
+
   // Animasi Pergerakan 2D Dots
   useEffect(() => {
     if (!isPlaying || matchEnded) return;
 
     const interval = setInterval(() => {
       const lastEvent = liveEvents.length > 0 ? liveEvents[liveEvents.length - 1] : null;
+      const state = engineRef.current;
       
-      let possession = 'NEUTRAL';
-      let attackingZoneX = 50;
-      let attackingZoneY = 50;
-      
+      // Tentukan Possession berdasarkan last event atau default
       if (lastEvent) {
-         if (lastEvent.teamId === homeTeam?.id) {
-           possession = 'HOME';
-           attackingZoneX = 60 + (Math.random() * 30); // Home menyerang ke kanan (60-90)
-           attackingZoneY = 20 + (Math.random() * 60);
-         } else if (lastEvent.teamId === awayTeam?.id) {
-           possession = 'AWAY';
-           attackingZoneX = 10 + (Math.random() * 30); // Away menyerang ke kiri (10-40)
-           attackingZoneY = 20 + (Math.random() * 60);
-         }
-      } else {
-         // Default if no events yet
-         attackingZoneX = 40 + Math.random() * 20;
-         attackingZoneY = 40 + Math.random() * 20;
-         possession = Math.random() > 0.5 ? 'HOME' : 'AWAY';
+         if (lastEvent.teamId === homeTeam?.id) state.possession = 'HOME';
+         else if (lastEvent.teamId === awayTeam?.id) state.possession = 'AWAY';
       }
 
-      // Hitung pergeseran global tim
-      const homeShiftX = (attackingZoneX - 50) * 0.3;
-      const awayShiftX = (attackingZoneX - 50) * 0.3;
+      // Pergerakan Natural
+      if (state.possession === 'HOME') {
+         state.targetX = Math.min(95, state.targetX + (Math.random() * 8 - 1)); // cenderung maju ke kanan
+      } else {
+         state.targetX = Math.max(5, state.targetX - (Math.random() * 8 - 1)); // cenderung maju ke kiri
+      }
+      
+      // Kadang pindah jalur (sayap/tengah)
+      if (Math.random() > 0.7) {
+         state.targetY = Math.max(10, Math.min(90, state.targetY + (Math.random() * 30 - 15)));
+      }
+
+      // Logika Passing / Dribbling
+      if (state.passCooldown > 0) state.passCooldown--;
+      else if (Math.random() > 0.4) {
+         // Pass bola ke pemain lain
+         state.carrierIdx = Math.floor(Math.random() * 10) + 1; // 1-10 (selain kiper)
+         state.passCooldown = 2; // Tunggu 2 tick sebelum pass lagi
+      }
+
+      // Hitung pergeseran global tim agar formasi ikut naik/turun
+      const homeShiftX = (state.targetX - 50) * 0.4;
+      const awayShiftX = (state.targetX - 50) * 0.4;
       
       // Update Home Dots
       const newHomeDots = HOME_BASE.map((base, index) => {
         let x = base.x + homeShiftX;
-        let y = base.y + (attackingZoneY - 50) * 0.15;
+        let y = base.y + (state.targetY - 50) * 0.2;
         
-        // Jiggle and expand/contract
-        x += (Math.random() * 4 - 2);
-        y += (Math.random() * 4 - 2);
-        
-        // If home has possession, one of the attackers/midfielders gets the ball
-        if (possession === 'HOME' && index >= 5) {
-           // Snap towards the attack zone
-           x = (x * 0.4) + (attackingZoneX * 0.6);
-           y = (y * 0.4) + (attackingZoneY * 0.6);
+        // Pemain yg bawa bola maju ke target
+        if (state.possession === 'HOME' && index === state.carrierIdx) {
+           x = (x * 0.2) + (state.targetX * 0.8);
+           y = (y * 0.2) + (state.targetY * 0.8);
+        } else {
+           // Jiggle kecil
+           x += (Math.random() * 3 - 1.5);
+           y += (Math.random() * 3 - 1.5);
         }
         
         return { x: Math.max(2, Math.min(98, x)), y: Math.max(2, Math.min(98, y)) };
@@ -127,14 +140,14 @@ export default function MatchSimulationPage() {
       // Update Away Dots
       const newAwayDots = AWAY_BASE.map((base, index) => {
         let x = base.x + awayShiftX;
-        let y = base.y + (attackingZoneY - 50) * 0.15;
+        let y = base.y + (state.targetY - 50) * 0.2;
         
-        x += (Math.random() * 4 - 2);
-        y += (Math.random() * 4 - 2);
-        
-        if (possession === 'AWAY' && index >= 5) {
-           x = (x * 0.4) + (attackingZoneX * 0.6);
-           y = (y * 0.4) + (attackingZoneY * 0.6);
+        if (state.possession === 'AWAY' && index === state.carrierIdx) {
+           x = (x * 0.2) + (state.targetX * 0.8);
+           y = (y * 0.2) + (state.targetY * 0.8);
+        } else {
+           x += (Math.random() * 3 - 1.5);
+           y += (Math.random() * 3 - 1.5);
         }
         
         return { x: Math.max(2, Math.min(98, x)), y: Math.max(2, Math.min(98, y)) };
@@ -143,34 +156,11 @@ export default function MatchSimulationPage() {
       setHomeDots(newHomeDots);
       setAwayDots(newAwayDots);
       
-      // Assign ball to a specific player closest to the attacking zone
-      if (possession === 'HOME') {
-         // Find player closest to attack zone
-         let closest = newHomeDots[10];
-         let minDist = 999;
-         newHomeDots.forEach((dot, i) => {
-            if (i === 0) return; // Not GK
-            const dist = Math.abs(dot.x - attackingZoneX) + Math.abs(dot.y - attackingZoneY);
-            if (dist < minDist) {
-               minDist = dist;
-               closest = dot;
-            }
-         });
-         setBallPos({ x: closest.x, y: closest.y });
-      } else if (possession === 'AWAY') {
-         let closest = newAwayDots[10];
-         let minDist = 999;
-         newAwayDots.forEach((dot, i) => {
-            if (i === 0) return; // Not GK
-            const dist = Math.abs(dot.x - attackingZoneX) + Math.abs(dot.y - attackingZoneY);
-            if (dist < minDist) {
-               minDist = dist;
-               closest = dot;
-            }
-         });
-         setBallPos({ x: closest.x, y: closest.y });
+      // Assign ball position
+      if (state.possession === 'HOME') {
+         setBallPos({ x: newHomeDots[state.carrierIdx].x, y: newHomeDots[state.carrierIdx].y });
       } else {
-         setBallPos({ x: 50, y: 50 });
+         setBallPos({ x: newAwayDots[state.carrierIdx].x, y: newAwayDots[state.carrierIdx].y });
       }
 
     }, 800);
