@@ -85,85 +85,112 @@ export default function MatchSimulationPage() {
   useEffect(() => {
     if (!isPlaying || matchEnded) return;
 
+    // Tick every 500ms for smoother sequence
     const interval = setInterval(() => {
-      const lastEvent = liveEvents.length > 0 ? liveEvents[liveEvents.length - 1] : null;
       const state = engineRef.current;
       
-      // Tentukan Possession berdasarkan last event atau default
-      if (lastEvent) {
-         if (lastEvent.teamId === homeTeam?.id) state.possession = 'HOME';
-         else if (lastEvent.teamId === awayTeam?.id) state.possession = 'AWAY';
-      }
-
-      // Pergerakan Natural
-      if (state.possession === 'HOME') {
-         state.targetX = Math.min(95, state.targetX + (Math.random() * 8 - 1)); // cenderung maju ke kanan
+      // Ambil event yang sesuai dengan menit saat ini
+      const activeEvent = liveEvents.find(e => e.minute === currentMinute);
+      
+      // Jika ada event (Gol/Peluang) di menit ini, jalankan "Event Phase"
+      if (activeEvent) {
+         state.possession = activeEvent.teamId === homeTeam?.id ? 'HOME' : 'AWAY';
+         
+         // Jika GOAL atau CHANCE, bola diarahkan ke gawang
+         if (activeEvent.type === 'GOAL' || activeEvent.type === 'CHANCE') {
+            const isHome = state.possession === 'HOME';
+            state.targetX = isHome ? 95 : 5; // Mulut gawang
+            state.targetY = 48 + Math.random() * 4; // Tengah gawang
+            state.carrierIdx = 10; // Striker yang nembak
+            state.passCooldown = 4; // Tahan selebrasi
+         }
       } else {
-         state.targetX = Math.max(5, state.targetX - (Math.random() * 8 - 1)); // cenderung maju ke kiri
-      }
-      
-      // Kadang pindah jalur (sayap/tengah)
-      if (Math.random() > 0.7) {
-         state.targetY = Math.max(10, Math.min(90, state.targetY + (Math.random() * 30 - 15)));
+         // "Build-up Phase"
+         // Tim yang pegang bola perlahan maju
+         if (state.possession === 'HOME') {
+            if (state.targetX < 85) state.targetX += Math.random() * 5;
+         } else {
+            if (state.targetX > 15) state.targetX -= Math.random() * 5;
+         }
+         
+         // Kadang pindah lajur serangan
+         if (Math.random() > 0.8) {
+            state.targetY = Math.max(15, Math.min(85, state.targetY + (Math.random() * 40 - 20)));
+         }
+
+         // Logika Passing antar pemain
+         if (state.passCooldown > 0) {
+            state.passCooldown--;
+         } else if (Math.random() > 0.3) {
+            // Oper bola maju (ke index yang lebih besar)
+            if (state.carrierIdx < 10) {
+               state.carrierIdx += Math.floor(Math.random() * 3) + 1;
+               if (state.carrierIdx > 10) state.carrierIdx = 10;
+            } else {
+               // Reset serangan kalau buntu, pindah possession
+               state.possession = state.possession === 'HOME' ? 'AWAY' : 'HOME';
+               state.carrierIdx = 1; // Mulai dari bek
+               state.targetX = state.possession === 'HOME' ? 30 : 70;
+            }
+            state.passCooldown = 2;
+         }
       }
 
-      // Logika Passing / Dribbling
-      if (state.passCooldown > 0) state.passCooldown--;
-      else if (Math.random() > 0.4) {
-         // Pass bola ke pemain lain
-         state.carrierIdx = Math.floor(Math.random() * 10) + 1; // 1-10 (selain kiper)
-         state.passCooldown = 2; // Tunggu 2 tick sebelum pass lagi
-      }
-
-      // Hitung pergeseran global tim agar formasi ikut naik/turun
-      const homeShiftX = (state.targetX - 50) * 0.4;
-      const awayShiftX = (state.targetX - 50) * 0.4;
+      // Kalkulasi formasi (Tim menyerang melebar & maju, tim bertahan merapat & mundur)
+      const homeAtk = state.possession === 'HOME';
+      const homeBaseXShift = homeAtk ? (state.targetX - 50) * 0.4 : (state.targetX - 50) * 0.2;
+      const awayBaseXShift = !homeAtk ? (state.targetX - 50) * 0.4 : (state.targetX - 50) * 0.2;
       
-      // Update Home Dots
-      const newHomeDots = HOME_BASE.map((base, index) => {
-        let x = base.x + homeShiftX;
-        let y = base.y + (state.targetY - 50) * 0.2;
-        
-        // Pemain yg bawa bola maju ke target
-        if (state.possession === 'HOME' && index === state.carrierIdx) {
-           x = (x * 0.2) + (state.targetX * 0.8);
-           y = (y * 0.2) + (state.targetY * 0.8);
-        } else {
-           // Jiggle kecil
-           x += (Math.random() * 3 - 1.5);
-           y += (Math.random() * 3 - 1.5);
-        }
-        
-        return { x: Math.max(2, Math.min(98, x)), y: Math.max(2, Math.min(98, y)) };
+      const newHomeDots = HOME_BASE.map((base, idx) => {
+         let x = base.x + homeBaseXShift;
+         let y = base.y;
+         
+         if (homeAtk) {
+            y += (state.targetY - 50) * 0.3; // Ikut arah serangan
+         } else {
+            y = 50 + (y - 50) * 0.7; // Rapat ke tengah
+         }
+
+         // Pemain bawa bola sedikit maju dari posisinya
+         if (homeAtk && idx === state.carrierIdx && !activeEvent) {
+            x += 5;
+         }
+         
+         return { x: Math.max(2, Math.min(98, x)), y: Math.max(2, Math.min(98, y)) };
       });
 
-      // Update Away Dots
-      const newAwayDots = AWAY_BASE.map((base, index) => {
-        let x = base.x + awayShiftX;
-        let y = base.y + (state.targetY - 50) * 0.2;
-        
-        if (state.possession === 'AWAY' && index === state.carrierIdx) {
-           x = (x * 0.2) + (state.targetX * 0.8);
-           y = (y * 0.2) + (state.targetY * 0.8);
-        } else {
-           x += (Math.random() * 3 - 1.5);
-           y += (Math.random() * 3 - 1.5);
-        }
-        
-        return { x: Math.max(2, Math.min(98, x)), y: Math.max(2, Math.min(98, y)) };
+      const newAwayDots = AWAY_BASE.map((base, idx) => {
+         let x = base.x + awayBaseXShift;
+         let y = base.y;
+         
+         if (!homeAtk) {
+            y += (state.targetY - 50) * 0.3; // Ikut arah serangan
+         } else {
+            y = 50 + (y - 50) * 0.7; // Rapat ke tengah
+         }
+
+         if (!homeAtk && idx === state.carrierIdx && !activeEvent) {
+            x -= 5;
+         }
+         
+         return { x: Math.max(2, Math.min(98, x)), y: Math.max(2, Math.min(98, y)) };
       });
       
       setHomeDots(newHomeDots);
       setAwayDots(newAwayDots);
       
-      // Assign ball position
-      if (state.possession === 'HOME') {
-         setBallPos({ x: newHomeDots[state.carrierIdx].x, y: newHomeDots[state.carrierIdx].y });
+      // Update posisi bola (ikut pemain, atau terbang ke gawang kalau shooting)
+      if (activeEvent && (activeEvent.type === 'GOAL' || activeEvent.type === 'CHANCE')) {
+         setBallPos({ x: state.targetX, y: state.targetY }); // Bola tembak ke targetX/Y (gawang)
       } else {
-         setBallPos({ x: newAwayDots[state.carrierIdx].x, y: newAwayDots[state.carrierIdx].y });
+         if (state.possession === 'HOME') {
+            setBallPos({ x: newHomeDots[state.carrierIdx].x, y: newHomeDots[state.carrierIdx].y });
+         } else {
+            setBallPos({ x: newAwayDots[state.carrierIdx].x, y: newAwayDots[state.carrierIdx].y });
+         }
       }
 
-    }, 800);
+    }, 500);
 
     return () => clearInterval(interval);
   }, [isPlaying, matchEnded, liveEvents, homeTeam, awayTeam]);
@@ -464,17 +491,17 @@ export default function MatchSimulationPage() {
 
               {/* 22 Players (Dots) */}
               {homeDots.map((dot, i) => (
-                <div key={`h-${i}`} className="absolute w-3 h-3 bg-red-500 rounded-full shadow-sm border border-white/50 transition-all duration-[800ms] ease-linear"
+                <div key={`h-${i}`} className="absolute w-3 h-3 bg-red-500 rounded-full shadow-sm border border-white/50 transition-all duration-[500ms] ease-linear"
                      style={{ left: `${dot.x}%`, top: `${dot.y}%`, transform: 'translate(-50%, -50%)' }} />
               ))}
               {awayDots.map((dot, i) => (
-                <div key={`a-${i}`} className="absolute w-3 h-3 bg-blue-500 rounded-full shadow-sm border border-white/50 transition-all duration-[800ms] ease-linear"
+                <div key={`a-${i}`} className="absolute w-3 h-3 bg-blue-500 rounded-full shadow-sm border border-white/50 transition-all duration-[500ms] ease-linear"
                      style={{ left: `${dot.x}%`, top: `${dot.y}%`, transform: 'translate(-50%, -50%)' }} />
               ))}
 
               {/* The Ball (Radar Dot) */}
               <div 
-                className="absolute w-3 h-3 bg-white rounded-full shadow-[0_0_15px_rgba(255,255,255,1)] transition-all duration-300 ease-in-out z-10" 
+                className="absolute w-3 h-3 bg-white rounded-full shadow-[0_0_15px_rgba(255,255,255,1)] transition-all duration-[500ms] ease-linear z-10" 
                 style={{ left: `${ballPos.x}%`, top: `${ballPos.y}%`, transform: 'translate(-50%, -50%)' }}
               />
               
